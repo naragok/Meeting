@@ -3,9 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, shrink-to-fit=no">
-    <title>M-Minutes PRO</title>
+    <title>M-Minutes PRO | AI Smart Meeting Assistant</title>
+    
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
     
     <!-- 모바일 PWA 및 iOS 사파리 전체화면 최적화 설정 -->
     <meta name="apple-mobile-web-app-capable" content="yes">
@@ -21,7 +23,13 @@
                 extend: {
                     colors: {
                         darkBg: '#0f172a',
-                        darkCard: '#1e293b'
+                        darkCard: '#1e293b',
+                        darkBorder: '#334155',
+                        brandAccent: '#4f46e5'
+                    },
+                    fontFamily: {
+                        sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace']
                     }
                 }
             }
@@ -31,281 +39,478 @@
     <style>
         body {
             -webkit-tap-highlight-color: transparent;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-            transition: background-color 0.3s ease, color 0.3s ease;
+            transition: background-color 0.3s cubic-bezier(0.4, 0, 0.2, 1), color 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            scrollbar-gutter: stable;
         }
         
-        /* 폰트 크기 반응형 바인딩 */
-        .font-size-small textarea, .font-size-small input { font-size: 0.75rem !important; }
-        .font-size-base textarea, .font-size-base input { font-size: 0.875rem !important; }
-        .font-size-large textarea, .font-size-large input { font-size: 1.125rem !important; }
+        /* 실무 결재선 테두리 및 인쇄 레이아웃 제어 */
+        .approval-table th, .approval-table td {
+            border: 1px solid #cbd5e1;
+            text-align: center;
+            font-size: 11px;
+            padding: 4px 8px;
+        }
+        .dark .approval-table th, .dark .approval-table td {
+            border: 1px solid #475569;
+        }
+        
+        /* 반응형 글꼴 크기 제어 */
+        .font-size-small textarea, .font-size-small input, .font-size-small div { font-size: 0.8rem !important; }
+        .font-size-base textarea, .font-size-base input, .font-size-base div { font-size: 0.9rem !important; }
+        .font-size-large textarea, .font-size-large input, .font-size-large div { font-size: 1.05rem !important; }
 
-        /* 부드러운 하단 터치바 스크롤 최적화 */
+        /* 부드러운 스크롤바 커스터마이징 */
         ::-webkit-scrollbar {
-            width: 6px;
-            height: 6px;
+            width: 8px;
+            height: 8px;
         }
         ::-webkit-scrollbar-track {
             background: transparent;
         }
         ::-webkit-scrollbar-thumb {
             background: #cbd5e1;
-            border-radius: 3px;
+            border-radius: 9999px;
+            border: 2px solid transparent;
+            background-clip: padding-box;
         }
         .dark ::-webkit-scrollbar-thumb {
             background: #475569;
+            border: 2px solid transparent;
+            background-clip: padding-box;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background-color: #94a3b8;
+            border: 2px solid transparent;
+            background-clip: padding-box;
         }
 
-        /* 인쇄 및 PDF 저장용 스타일 시트 보정 */
+        /* 프린트 스타일 시트 보정 */
         @media print {
             .no-print { display: none !important; }
-            main { display: block !important; margin: 0 !important; padding: 1cm !important; }
-            textarea { border: none !important; height: auto !important; overflow: visible !important; background: transparent !important; }
+            main { display: block !important; margin: 0 !important; padding: 1.5cm !important; width: 100% !important; max-width: 100% !important; }
+            textarea { border: none !important; height: auto !important; overflow: visible !important; background: transparent !important; color: #000 !important; }
             .print-card { border: none !important; box-shadow: none !important; background: transparent !important; }
+            body { background: white !important; color: black !important; }
+        }
+
+        /* 마이크 시각 파형 고정 높이 */
+        #visualizerCanvas {
+            width: 100%;
+            height: 60px;
+            border-radius: 12px;
         }
     </style>
 </head>
-<body class="bg-slate-50 dark:bg-darkBg text-slate-800 dark:text-slate-200 font-size-base">
+<body class="bg-slate-50 dark:bg-darkBg text-slate-800 dark:text-slate-200 font-size-base antialiased">
 
-    <header class="no-print sticky top-0 z-40 bg-white/80 dark:bg-darkCard/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-700 px-4 py-3 flex items-center justify-between">
+    <header class="no-print sticky top-0 z-40 bg-white/85 dark:bg-darkCard/85 backdrop-blur-md border-b border-slate-200 dark:border-darkBorder px-4 py-3.5 flex items-center justify-between transition-colors duration-300">
         <div class="flex items-center space-x-3">
-            <div class="p-2 bg-indigo-600 text-white rounded-xl shadow-lg">
-                <i data-lucide="zap" class="w-5 h-5"></i>
+            <div class="p-2.5 bg-gradient-to-tr from-indigo-600 to-violet-500 text-white rounded-xl shadow-lg shadow-indigo-500/20">
+                <i data-lucide="sparkles" class="w-5 h-5 animate-pulse"></i>
             </div>
-            <div class="hidden sm:block">
-                <h1 class="text-md font-bold tracking-tight flex items-center gap-2">
-                    M-Minutes <span class="text-[10px] bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300 px-2 py-0.5 rounded-full">v2.5 PRESET</span>
+            <div>
+                <h1 class="text-sm font-extrabold tracking-tight flex items-center gap-2">
+                    M-Minutes PRO <span class="text-[9px] bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 font-bold px-2 py-0.5 rounded-full border border-indigo-200 dark:border-indigo-800">v2.9 Enterprise</span>
                 </h1>
-                <!-- 회의 경과 타이머 -->
-                <div class="flex items-center gap-1.5 text-[10px] text-slate-500">
-                    <i data-lucide="timer" class="w-3 h-3"></i> 
-                    진행 시간: <span id="meetingDuration">00:00:00</span>
+                <div class="flex items-center gap-1.5 text-[10px] text-slate-500 dark:text-slate-400 font-medium">
+                    <span class="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span>
+                    <span>회의 세션 시간:</span> <span id="meetingDuration" class="font-mono font-bold text-slate-700 dark:text-slate-300">00:00:00</span>
                 </div>
             </div>
         </div>
 
-        <div class="flex items-center space-x-1.5">
-            <!-- 테마 토글 버튼 -->
-            <button onclick="toggleTheme()" class="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-xl transition">
-                <i data-lucide="sun" id="themeIconSun" class="w-5 h-5 text-amber-500"></i>
-                <i data-lucide="moon" id="themeIconMoon" class="w-5 h-5 text-slate-400 hidden"></i>
+        <div class="flex items-center space-x-2">
+            <!-- 실시간 본문 검색 단축 아이콘 -->
+            <button onclick="toggleLocalSearch()" class="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all duration-200 text-slate-500 dark:text-slate-400" title="본문 검색 (Find)">
+                <i data-lucide="search" class="w-4.5 h-4.5 text-indigo-500"></i>
             </button>
-            <!-- 폰트 크기 토글 -->
-            <button onclick="cycleFontSize()" class="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-xl transition flex items-center gap-1 font-bold text-xs">
-                <span id="fontSizeLabel">가</span>
+
+            <!-- 테마 전환 토글 -->
+            <button onclick="toggleTheme()" class="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all duration-200 text-slate-500 dark:text-slate-400" title="화면 테마 변경">
+                <i data-lucide="sun" id="themeIconSun" class="w-4 h-4 text-amber-500"></i>
+                <i data-lucide="moon" id="themeIconMoon" class="w-4 h-4 text-slate-300 hidden"></i>
             </button>
-            <div class="w-px h-6 bg-slate-200 dark:bg-slate-700 mx-1"></div>
-            <button onclick="createNewMeeting()" class="bg-indigo-600 text-white text-[11px] font-bold px-3 py-2 rounded-lg shadow-md flex items-center gap-1">
-                <i data-lucide="plus" class="w-4 h-4"></i> 신규
+            
+            <!-- 글자 크기 변경 버튼 -->
+            <button onclick="cycleFontSize()" class="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all duration-200 flex items-center gap-1.5 font-bold text-xs" title="글자 크기 변경">
+                <i data-lucide="type" class="w-4 h-4 text-slate-400"></i>
+                <span id="fontSizeLabel" class="text-[11px] bg-slate-200 dark:bg-slate-700 px-1.5 py-0.5 rounded text-slate-700 dark:text-slate-300">가</span>
             </button>
-            <button onclick="openArchiveModal()" class="relative p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-xl transition">
-                <i data-lucide="folder-search" class="w-5 h-5"></i>
-                <span id="archiveBadge" class="absolute -top-0.5 -right-0.5 w-4 h-4 bg-indigo-600 text-[9px] text-white rounded-full flex items-center justify-center font-bold">0</span>
+
+            <div class="w-px h-6 bg-slate-200 dark:bg-darkBorder mx-1"></div>
+
+            <!-- 신규 생성 및 목록함 -->
+            <button onclick="createNewMeeting()" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-3 py-2 rounded-lg shadow-md transition-all duration-200 flex items-center gap-1.5">
+                <i data-lucide="plus-circle" class="w-4 h-4"></i> <span class="hidden md:inline">신규 회의</span>
             </button>
-            <button onclick="toggleSettings()" class="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-xl transition">
-                <i data-lucide="settings" class="w-5 h-5"></i>
+            <button onclick="openArchiveModal()" class="relative p-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg transition" title="회의 히스토리 보관함">
+                <i data-lucide="database" class="w-4.5 h-4.5"></i>
+                <span id="archiveBadge" class="absolute -top-1.5 -right-1.5 w-4 h-4 bg-rose-500 text-[8px] text-white rounded-full flex items-center justify-center font-bold shadow-sm">0</span>
+            </button>
+            <button onclick="toggleCorporatePanel()" class="p-2 bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 dark:hover:bg-indigo-900 rounded-lg text-indigo-600 dark:text-indigo-400 transition" title="실무 도구 (결재선/메신저 공유)">
+                <i data-lucide="briefcase" class="w-4.5 h-4.5"></i>
+            </button>
+            <button onclick="toggleSettings()" class="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl text-slate-500 dark:text-slate-400 transition" title="설정">
+                <i data-lucide="sliders" class="w-4.5 h-4.5"></i>
             </button>
         </div>
     </header>
 
-    <main class="max-w-7xl mx-auto p-4 grid grid-cols-1 lg:grid-cols-12 gap-6 pb-20">
-        <!-- 왼쪽 사이드바: 설정 및 오디오 (lg:col-span-4) -->
+    <div id="localSearchContainer" class="no-print max-w-7xl mx-auto px-4 pt-4 hidden">
+        <div class="bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-100 dark:border-indigo-900/50 rounded-2xl p-3 flex flex-wrap items-center justify-between gap-3 shadow-sm">
+            <div class="flex items-center gap-2.5 flex-1 min-w-[240px]">
+                <div class="p-1.5 bg-indigo-500/10 dark:bg-indigo-400/10 text-indigo-600 dark:text-indigo-400 rounded-lg">
+                    <i data-lucide="search" class="w-4 h-4"></i>
+                </div>
+                <input type="text" id="localSearchInput" oninput="searchInCurrentEditor()" class="bg-transparent text-sm font-semibold outline-none flex-1 placeholder-indigo-400 dark:placeholder-indigo-600 text-slate-800 dark:text-slate-200" placeholder="현재 편집 중인 원본 대화 및 최종 요약문 내 단어 실시간 검색...">
+            </div>
+            <div class="flex items-center gap-3 text-xs font-bold text-slate-500 dark:text-slate-400">
+                <span id="localSearchCount" class="bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300 px-2.5 py-1 rounded-full text-[11px]">0개 발견</span>
+                <div class="flex gap-1 border-l border-slate-200 dark:border-darkBorder pl-3">
+                    <button onclick="navigateLocalSearch('prev')" class="p-1.5 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-lg transition" title="이전 결과"><i data-lucide="chevron-up" class="w-4 h-4"></i></button>
+                    <button onclick="navigateLocalSearch('next')" class="p-1.5 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-lg transition" title="다음 결과"><i data-lucide="chevron-down" class="w-4 h-4"></i></button>
+                </div>
+                <button onclick="toggleLocalSearch(false)" class="p-1.5 hover:bg-rose-100 dark:hover:bg-rose-950/40 text-rose-500 rounded-lg transition ml-1" title="닫기"><i data-lucide="x" class="w-4 h-4"></i></button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 실무 전용 결재선 및 사내 메신저 포맷 기획 영역 -->
+    <div id="corporatePanel" class="no-print max-w-7xl mx-auto px-4 pt-4 hidden">
+        <div class="bg-white dark:bg-darkCard border border-slate-200 dark:border-darkBorder rounded-2xl p-4 shadow-sm grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div class="space-y-3">
+                <h3 class="text-xs font-bold text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+                    <i data-lucide="signature" class="w-4 h-4 text-indigo-500"></i> 기업용 결재선 편집기
+                </h3>
+                <div class="grid grid-cols-3 gap-2">
+                    <div>
+                        <label class="block text-[10px] text-slate-400 mb-1">기안자 직급/이름</label>
+                        <input type="text" id="apprName1" oninput="drawApprovalLine()" class="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-darkBorder rounded-xl px-2.5 py-1.5 text-xs font-semibold outline-none focus:ring-1 focus:ring-indigo-500" placeholder="기안/김대리" value="기안/김대리">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] text-slate-400 mb-1">검토자 직급/이름</label>
+                        <input type="text" id="apprName2" oninput="drawApprovalLine()" class="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-darkBorder rounded-xl px-2.5 py-1.5 text-xs font-semibold outline-none focus:ring-1 focus:ring-indigo-500" placeholder="검토/박팀장" value="검토/박팀장">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] text-slate-400 mb-1">승인자 직급/이름</label>
+                        <input type="text" id="apprName3" oninput="drawApprovalLine()" class="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-darkBorder rounded-xl px-2.5 py-1.5 text-xs font-semibold outline-none focus:ring-1 focus:ring-indigo-500" placeholder="승인/이본부장" value="승인/이본부장">
+                    </div>
+                </div>
+                <div class="flex items-center justify-between">
+                    <span class="text-[10px] text-slate-400">활성화 시 인쇄 및 요약서 상단에 자동 출력됩니다.</span>
+                    <button onclick="toggleApprovalLineVisibility()" id="btnToggleApproval" class="bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-bold px-3 py-1.5 rounded-lg transition shadow-sm">
+                        결재선 숨기기
+                    </button>
+                </div>
+            </div>
+            
+            <div class="space-y-3 border-t md:border-t-0 md:border-l border-slate-100 dark:border-darkBorder pt-3 md:pt-0 md:pl-4 flex flex-col justify-between">
+                <div>
+                    <h3 class="text-xs font-bold text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+                        <i data-lucide="send" class="w-4 h-4 text-emerald-500"></i> 사내 메신저 공유 포매터
+                    </h3>
+                    <p class="text-[10px] text-slate-400 mt-1">회의 제목, 일시, 안건 및 할 일을 Slack 이나 MS Teams에 맞춘 가독성 높은 이모지 포맷으로 전송 대기화합니다.</p>
+                </div>
+                <div class="flex gap-2">
+                    <button onclick="copyMessengerFormat('slack')" class="flex-1 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-bold py-2.5 rounded-xl transition flex items-center justify-center gap-1.5">
+                        <i data-lucide="slack" class="w-4 h-4 text-[#4A154B]"></i> Slack 포맷 복사
+                    </button>
+                    <button onclick="copyMessengerFormat('teams')" class="flex-1 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-bold py-2.5 rounded-xl transition flex items-center justify-center gap-1.5">
+                        <i data-lucide="message-square" class="w-4 h-4 text-[#464EB8]"></i> MS Teams 복사
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <main class="max-w-7xl mx-auto p-4 grid grid-cols-1 lg:grid-cols-12 gap-6 pb-24">
+        
+        <!-- 왼쪽 컨트롤 및 입력 사이드바 (lg:col-span-4) -->
         <section class="lg:col-span-4 space-y-4 no-print">
             
-            <!-- 회의 정보 카드 -->
-            <div class="bg-white dark:bg-darkCard rounded-2xl p-4 border border-slate-200 dark:border-slate-700 shadow-sm space-y-3">
+            <!-- 회의 메타데이터 카드 -->
+            <div class="bg-white dark:bg-darkCard rounded-2xl p-4 border border-slate-200 dark:border-darkBorder shadow-sm space-y-3.5">
                 <div class="flex items-center justify-between">
-                    <h2 class="text-[11px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
-                        <i data-lucide="info" class="w-3.5 h-3.5"></i> 회의 속성
+                    <h2 class="text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
+                        <i data-lucide="calendar-days" class="w-3.5 h-3.5"></i> 기본 정보 설정
                     </h2>
-                    <span id="saveStatus" class="text-[10px] text-emerald-500 flex items-center gap-1">
-                        <span class="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></span>동기화됨
+                    <span id="saveStatus" class="text-[10px] text-emerald-500 dark:text-emerald-400 flex items-center gap-1 font-medium bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-full border border-emerald-100 dark:border-emerald-900/60">
+                        <span class="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></span>동기화 완료
                     </span>
                 </div>
-                <input type="text" id="meetingTitle" class="w-full bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="회의 제목을 입력하세요">
-                <div class="grid grid-cols-2 gap-2">
-                    <input type="datetime-local" id="meetingDate" class="w-full bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-[11px] outline-none">
-                    <input type="text" id="meetingAttendees" class="w-full bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-[11px] outline-none" placeholder="참석자">
+                <div class="space-y-2">
+                    <label class="block text-[10px] font-bold text-slate-500 dark:text-slate-400">회의 타이틀</label>
+                    <input type="text" id="meetingTitle" class="w-full bg-slate-50 dark:bg-slate-900/40 border border-slate-200 dark:border-darkBorder rounded-xl px-3 py-2 text-sm font-semibold focus:ring-2 focus:ring-indigo-500 outline-none transition" placeholder="예: 전략 기획 파트 주간 세션">
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <div>
+                        <label class="block text-[10px] font-bold text-slate-500 dark:text-slate-400 mb-1">일시</label>
+                        <input type="datetime-local" id="meetingDate" class="w-full bg-slate-50 dark:bg-slate-900/40 border border-slate-200 dark:border-darkBorder rounded-xl px-3 py-2 text-[11px] outline-none focus:ring-1 focus:ring-indigo-500">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-bold text-slate-500 dark:text-slate-400 mb-1">참석자 목록</label>
+                        <input type="text" id="meetingAttendees" class="w-full bg-slate-50 dark:bg-slate-900/40 border border-slate-200 dark:border-darkBorder rounded-xl px-3 py-2 text-[11px] outline-none focus:ring-1 focus:ring-indigo-500" placeholder="참석자 입력 (콤마 구분)">
+                    </div>
                 </div>
             </div>
 
-            <div class="bg-white dark:bg-darkCard rounded-2xl p-4 border border-slate-200 dark:border-slate-700 shadow-sm space-y-4">
-                <div class="flex bg-slate-100 dark:bg-slate-900 p-1 rounded-xl">
-                    <button onclick="switchInputMode('realtime')" id="tab-realtime" class="flex-1 py-1.5 text-[11px] font-bold rounded-lg transition-all bg-white dark:bg-darkCard text-indigo-600 shadow-sm">실시간 녹음</button>
-                    <button onclick="switchInputMode('upload')" id="tab-upload" class="flex-1 py-1.5 text-[11px] font-bold rounded-lg transition-all text-slate-500">파일 업로드</button>
+            <!-- STT 및 음성 분석 패널 -->
+            <div class="bg-white dark:bg-darkCard rounded-2xl p-4 border border-slate-200 dark:border-darkBorder shadow-sm space-y-4">
+                <div class="flex bg-slate-100 dark:bg-slate-900 p-1.5 rounded-xl">
+                    <button onclick="switchInputMode('realtime')" id="tab-realtime" class="flex-1 py-1.5 text-xs font-bold rounded-lg transition-all bg-white dark:bg-darkCard text-indigo-600 dark:text-indigo-400 shadow-sm">실시간 음성 인식</button>
+                    <button onclick="switchInputMode('upload')" id="tab-upload" class="flex-1 py-1.5 text-xs font-bold rounded-lg transition-all text-slate-500 dark:text-slate-400">오디오 파일 업로드</button>
                 </div>
 
-                <div id="panel-realtime" class="space-y-3">
-                    <div class="py-6 bg-slate-50 dark:bg-slate-900/30 rounded-xl border-2 border-dashed border-slate-200 dark:border-slate-700 flex flex-col items-center">
-                        <!-- 데시벨 미터 -->
-                        <div id="micWaves" class="hidden flex items-end gap-1 h-10 mb-2">
-                            <div class="w-1.5 bg-indigo-500 rounded-full h-2 wave-bar"></div>
-                            <div class="w-1.5 bg-indigo-500 rounded-full h-8 wave-bar"></div>
-                            <div class="w-1.5 bg-indigo-500 rounded-full h-4 wave-bar"></div>
-                            <div class="w-1.5 bg-indigo-500 rounded-full h-6 wave-bar"></div>
-                            <div class="w-1.5 bg-indigo-500 rounded-full h-3 wave-bar"></div>
+                <!-- 실시간 음성 인식 파트 -->
+                <div id="panel-realtime" class="space-y-3.5">
+                    <div class="py-5 px-3 bg-slate-50 dark:bg-slate-900/30 rounded-xl border border-dashed border-slate-200 dark:border-darkBorder flex flex-col items-center">
+                        <div class="w-full relative mb-1" id="visualizerContainer">
+                            <canvas id="visualizerCanvas" class="bg-slate-100/60 dark:bg-slate-900/40"></canvas>
                         </div>
-                        <i data-lucide="mic" id="micIdle" class="w-10 h-10 text-slate-300 mb-2"></i>
-                        <span id="recStatus" class="text-[10px] text-slate-400 font-bold">인식 대기 중</span>
+                        <span id="recStatus" class="text-[10px] text-slate-400 dark:text-slate-500 font-extrabold tracking-wide uppercase mt-1">마이크 대기 상태</span>
                     </div>
-                    <div class="flex gap-2">
-                        <button id="btnStartSTT" onclick="startSpeechRecognition()" class="flex-1 bg-indigo-600 text-white font-bold py-3 rounded-xl flex justify-center items-center gap-2 transition hover:bg-indigo-700">
-                            <i data-lucide="play" class="w-4 h-4"></i> 녹음 시작
-                        </button>
-                        <button id="btnStopSTT" onclick="stopSpeechRecognition()" class="flex-1 bg-rose-500 text-white font-bold py-3 rounded-xl flex justify-center items-center gap-2 hidden transition hover:bg-rose-600">
-                            <i data-lucide="square" class="w-4 h-4"></i> 중지
+                    <div class="space-y-2">
+                        <div class="flex gap-2">
+                            <button id="btnStartSTT" onclick="startSpeechRecognition()" class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-xl flex justify-center items-center gap-2 transition shadow-md shadow-indigo-600/10 text-xs">
+                                <i data-lucide="mic" class="w-4.5 h-4.5"></i> 음성 녹음 시작
+                            </button>
+                            <button id="btnStopSTT" onclick="stopSpeechRecognition()" class="flex-1 bg-rose-500 hover:bg-rose-600 text-white font-bold py-3 rounded-xl flex justify-center items-center gap-2 hidden transition shadow-md shadow-rose-500/10 text-xs">
+                                <i data-lucide="mic-off" class="w-4.5 h-4.5"></i> 녹음 및 중지
+                            </button>
+                        </div>
+                        <button id="downloadVoiceBtn" onclick="downloadVoiceBackup()" class="w-full hidden bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded-xl flex justify-center items-center gap-2 transition text-xs shadow-md shadow-emerald-600/10">
+                            <i data-lucide="download-cloud" class="w-4 h-4"></i> 실무 증빙용 회의 오디오 파일 다운로드
                         </button>
                     </div>
                 </div>
 
+                <!-- 파일 업로드 파트 -->
                 <div id="panel-upload" class="hidden space-y-3">
-                    <div class="relative border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-xl p-4 text-center bg-slate-50 dark:bg-slate-900/30">
+                    <div class="relative border-2 border-dashed border-slate-200 dark:border-darkBorder rounded-xl p-5 text-center bg-slate-50 dark:bg-slate-900/30 hover:bg-slate-100 dark:hover:bg-slate-900/50 transition">
                         <input type="file" id="audioFile" accept="audio/*" onchange="handleAudioUpload(event)" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer">
-                        <i data-lucide="file-audio" class="w-8 h-8 text-slate-400 mx-auto mb-1"></i>
-                        <p class="text-[10px] font-bold text-slate-500">오디오 파일 선택</p>
+                        <i data-lucide="upload-cloud" class="w-9 h-9 text-indigo-500 mx-auto mb-2"></i>
+                        <p class="text-xs font-bold text-slate-600 dark:text-slate-300">오디오 파일 선택 또는 드래그</p>
+                        <p class="text-[10px] text-slate-400 mt-1">MP3, WAV, M4A 형식 지원</p>
                     </div>
-                    <div id="audioPlayer" class="hidden space-y-2">
-                        <div class="flex justify-between text-[9px] font-bold text-slate-400">
-                            <span id="fileName">file.m4a</span>
-                            <select id="audioSpeed" onchange="adjustSpeed()" class="bg-transparent text-slate-800 dark:text-white">
-                                <option value="1.0">1.0x</option>
-                                <option value="1.2">1.2x</option>
-                                <option value="1.5">1.5x</option>
-                            </select>
+                    <div id="audioPlayer" class="hidden space-y-2 p-3 bg-slate-50 dark:bg-slate-900/50 rounded-xl border border-slate-100 dark:border-darkBorder">
+                        <div class="flex justify-between items-center text-[10px] font-bold text-slate-400">
+                            <span id="fileName" class="truncate max-w-[150px]">audio_track.mp3</span>
+                            <div class="flex items-center gap-1.5">
+                                <i data-lucide="gauge" class="w-3.5 h-3.5"></i>
+                                <select id="audioSpeed" onchange="adjustSpeed()" class="bg-transparent text-slate-800 dark:text-slate-200 font-mono text-[10px] focus:outline-none">
+                                    <option value="1.0" class="dark:bg-darkCard">1.0배속</option>
+                                    <option value="1.25" class="dark:bg-darkCard">1.25배속</option>
+                                    <option value="1.5" class="dark:bg-darkCard">1.5배속</option>
+                                    <option value="2.0" class="dark:bg-darkCard">2.0배속</option>
+                                </select>
+                            </div>
                         </div>
-                        <audio id="audioElement" controls class="w-full h-10"></audio>
+                        <audio id="audioElement" controls class="w-full h-8 mt-1"></audio>
                     </div>
                 </div>
             </div>
 
-            <div class="bg-indigo-600 dark:bg-indigo-900 rounded-2xl p-4 shadow-lg text-white space-y-3">
-                <div class="flex items-center justify-between">
-                    <span class="text-xs font-bold flex items-center gap-1.5"><i data-lucide="sparkles" class="w-4 h-4"></i> AI 스마트 요약 비서</span>
-                    <span class="text-[9px] bg-white/20 px-2 py-0.5 rounded-full">Gemini 2.5</span>
+            <!-- AI 스마트 템플릿 제어 -->
+            <div class="bg-gradient-to-br from-indigo-700 via-indigo-600 to-violet-700 dark:from-indigo-950 dark:via-indigo-900 dark:to-violet-950 rounded-2xl p-4 shadow-xl text-white space-y-4 relative overflow-hidden">
+                <div class="absolute -right-10 -bottom-10 opacity-10">
+                    <i data-lucide="cpu" class="w-40 h-40"></i>
                 </div>
-                <p class="text-[10px] text-indigo-100">음성 텍스트에서 결정사항과 할 일을 추출합니다.</p>
-                <button onclick="runAI()" class="w-full bg-white text-indigo-700 font-black py-3 rounded-xl shadow-sm hover:bg-indigo-50 transition flex items-center justify-center gap-2">
-                    <i data-lucide="wand-2" class="w-4 h-4"></i> 회의 요약 생성
+                <div class="space-y-1">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-black tracking-widest flex items-center gap-1.5 uppercase">
+                            <i data-lucide="sparkles" class="w-4.5 h-4.5 text-amber-300"></i> AI 스마트 요약 파트너
+                        </span>
+                        <span class="text-[9px] bg-white/20 border border-white/30 px-2 py-0.5 rounded-full font-bold">Gemini Engine</span>
+                    </div>
+                    <p class="text-[10px] text-indigo-100">정밀 음성 텍스트를 고품질 회의록 템플릿 형태로 재구성합니다.</p>
+                </div>
+
+                <div class="space-y-1.5">
+                    <label class="block text-[10px] font-extrabold text-indigo-200">회의록 템플릿 테마</label>
+                    <select id="summaryTemplate" class="w-full bg-white/10 border border-white/20 rounded-xl px-2.5 py-2 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-white/40 text-white select-theme-option">
+                        <option value="standard" class="text-slate-800">📋 일반 업무 / 정기 회의</option>
+                        <option value="sprint" class="text-slate-800">🏃 개발 스프린트 & 회고</option>
+                        <option value="brainstorming" class="text-slate-800">💡 브레인스토밍 & 아이디어</option>
+                        <option value="sales" class="text-slate-800">🤝 영업 미팅 & 비즈니스 협의</option>
+                    </select>
+                </div>
+
+                <button onclick="runAI()" class="w-full bg-white text-indigo-700 font-extrabold py-3 rounded-xl shadow-lg hover:bg-slate-50 transition-all duration-200 flex items-center justify-center gap-2 transform active:scale-95 text-xs">
+                    <i data-lucide="wand-2" class="w-4.5 h-4.5 text-indigo-600"></i> 회의록 AI 요약 시작
                 </button>
-                <div id="aiLoader" class="hidden flex items-center justify-center gap-2 text-[10px]">
-                    <div class="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                    분석 중...
+                <div id="aiLoader" class="hidden flex items-center justify-center gap-2 text-xs font-bold bg-black/20 py-2.5 rounded-xl">
+                    <div class="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                    회의 전문 정밀 분석 중...
                 </div>
             </div>
         </section>
 
-        <!-- 오른쪽: 텍스트 편집 구역 (lg:col-span-8) -->
         <section class="lg:col-span-8 space-y-4">
             
-            <!-- 원본 텍스트 및 단축키 -->
-            <div class="bg-white dark:bg-darkCard rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm p-4 flex flex-col h-[320px]">
-                <div class="no-print flex items-center justify-between mb-2">
-                    <h2 class="text-[11px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5"><i data-lucide="list" class="w-3.5 h-3.5"></i> 녹음된 대화 원본</h2>
-                    <div class="flex gap-2">
-                        <button onclick="insertAtCursor('[📌 중요] ')" class="text-[9px] font-bold bg-rose-50 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400 px-2 py-1 rounded-md">📌 중요</button>
-                        <button onclick="insertAtCursor('[❓ 질문] ')" class="text-[9px] font-bold bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 px-2 py-1 rounded-md">❓ 질문</button>
-                        <button onclick="insertTimestamp()" class="text-[9px] font-bold bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 px-2 py-1 rounded-md">⏱ 시각</button>
-                    </div>
+            <!-- 최종 출력/보고용 기안용 결재선 레이아웃 (Print 시 노출 최적화) -->
+            <div id="approvalLineDisplay" class="bg-white dark:bg-darkCard border border-slate-200 dark:border-darkBorder p-4 rounded-2xl shadow-sm flex justify-between items-center">
+                <div class="space-y-1">
+                    <span class="text-[10px] font-black text-indigo-600 uppercase tracking-wider">OFFICIAL MEETING MINUTES</span>
+                    <h3 class="text-xs font-bold text-slate-700 dark:text-slate-300">본 회의록은 사내 표준 결재 규격을 충족합니다.</h3>
                 </div>
-                <textarea id="rawText" class="w-full flex-1 bg-slate-50 dark:bg-slate-900/50 rounded-xl p-3 outline-none resize-none leading-relaxed" placeholder="음성이 이곳에 실시간으로 기록됩니다..."></textarea>
+                <div class="flex">
+                    <table class="approval-table font-semibold text-slate-800 dark:text-slate-200">
+                        <thead>
+                            <tr class="bg-slate-50 dark:bg-slate-900">
+                                <th id="apprRole1" class="w-20 font-bold">기안</th>
+                                <th id="apprRole2" class="w-20 font-bold">검토</th>
+                                <th id="apprRole3" class="w-20 font-bold">승인</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td class="h-12 align-middle text-[10px] text-slate-400" id="apprUser1">김대리</td>
+                                <td class="h-12 align-middle text-[10px] text-slate-400" id="apprUser2">박팀장</td>
+                                <td class="h-12 align-middle text-[10px] text-slate-400" id="apprUser3">이본부장</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
             </div>
 
-            <!-- 요약 회의록 및 할 일 트래커 -->
-            <div class="bg-white dark:bg-darkCard rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm p-4 flex flex-col min-h-[400px]">
+            <!-- 원본 음성 스크립트 작성 구역 -->
+            <div class="bg-white dark:bg-darkCard rounded-2xl border border-slate-200 dark:border-darkBorder shadow-sm p-4 flex flex-col h-[340px] transition-all">
+                <div class="no-print flex items-center justify-between mb-2">
+                    <h2 class="text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
+                        <i data-lucide="text-quote" class="w-4 h-4 text-indigo-500"></i> 실시간 대화 스크립트
+                    </h2>
+                    <div class="flex gap-1.5">
+                        <button onclick="insertAtCursor('[📌 핵심안건] ')" class="text-[9px] font-bold bg-amber-50 hover:bg-amber-100 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 px-2 py-1.5 rounded-lg border border-amber-200/50 dark:border-amber-900/30 transition">📌 핵심안건</button>
+                        <button onclick="insertAtCursor('[❓ 체크사항] ')" class="text-[9px] font-bold bg-blue-50 hover:bg-blue-100 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 px-2 py-1.5 rounded-lg border border-blue-200/50 dark:border-blue-900/30 transition">❓ 체크사항</button>
+                        <button onclick="insertAtCursor(' - [ ] [담당자] 할일 (~MM-DD) [높음] ')" class="text-[9px] font-bold bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 px-2 py-1.5 rounded-lg border border-emerald-200/50 dark:border-emerald-900/30 transition">+ 실무 Action</button>
+                        <button onclick="insertTimestamp()" class="text-[9px] font-bold bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-2 py-1.5 rounded-lg border border-slate-200 dark:border-darkBorder transition">⏱️ 시간</button>
+                    </div>
+                </div>
+                <textarea id="rawText" class="w-full flex-1 bg-slate-50/50 dark:bg-slate-900/40 rounded-xl p-3.5 outline-none resize-none leading-relaxed text-sm focus:ring-1 focus:ring-slate-300 dark:focus:ring-slate-700 transition" placeholder="인식된 대화 본문이 실시간 스크립트로 구성됩니다... 직접 수정하거나 텍스트를 기입할 수도 있습니다."></textarea>
+            </div>
+
+            <!-- 최종 요약 회의록 + 액션 아이템 보드 -->
+            <div class="bg-white dark:bg-darkCard rounded-2xl border border-slate-200 dark:border-darkBorder shadow-sm p-4 flex flex-col min-h-[480px] transition-all">
                 <div class="no-print flex items-center justify-between mb-3">
-                    <h2 class="text-[11px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5"><i data-lucide="check-circle" class="w-3.5 h-3.5"></i> 최종 회의록 요약</h2>
+                    <h2 class="text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
+                        <i data-lucide="file-check" class="w-4 h-4 text-emerald-500"></i> 마크다운 최종 요약본
+                    </h2>
                     <div class="flex gap-1">
-                        <button onclick="copyAll()" class="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition" title="복사"><i data-lucide="copy" class="w-4 h-4"></i></button>
-                        <button onclick="window.print()" class="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition" title="인쇄"><i data-lucide="printer" class="w-4 h-4"></i></button>
-                        <button onclick="downloadText()" class="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition" title="다운로드"><i data-lucide="download" class="w-4 h-4"></i></button>
+                        <button onclick="copyAll()" class="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-500 dark:text-slate-400 transition" title="텍스트 클립보드 복사"><i data-lucide="copy" class="w-4 h-4"></i></button>
+                        <button onclick="window.print()" class="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-500 dark:text-slate-400 transition" title="인쇄 및 PDF 파일"><i data-lucide="printer" class="w-4 h-4"></i></button>
+                        <button onclick="downloadText()" class="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-500 dark:text-slate-400 transition" title="마크다운 다운로드"><i data-lucide="arrow-down-to-line" class="w-4 h-4"></i></button>
                     </div>
                 </div>
 
-                <!-- 마크다운 툴바 -->
-                <div class="no-print flex gap-1 mb-2 border-b border-slate-100 dark:border-slate-800 pb-2">
-                    <button onclick="formatMd('bold')" class="p-1.5 hover:bg-slate-50 dark:hover:bg-slate-700 rounded" title="굵게"><i data-lucide="bold" class="w-3.5 h-3.5"></i></button>
-                    <button onclick="formatMd('italic')" class="p-1.5 hover:bg-slate-50 dark:hover:bg-slate-700 rounded" title="기울임"><i data-lucide="italic" class="w-3.5 h-3.5"></i></button>
-                    <button onclick="formatMd('list')" class="p-1.5 hover:bg-slate-50 dark:hover:bg-slate-700 rounded" title="목록"><i data-lucide="list" class="w-3.5 h-3.5"></i></button>
-                    <button onclick="formatMd('quote')" class="p-1.5 hover:bg-slate-50 dark:hover:bg-slate-700 rounded" title="인용구"><i data-lucide="quote" class="w-3.5 h-3.5"></i></button>
-                    <button onclick="formatMd('todo')" class="p-1.5 hover:bg-slate-50 dark:hover:bg-slate-700 rounded text-indigo-600" title="할 일 추가"><i data-lucide="check-square" class="w-3.5 h-3.5"></i></button>
+                <div class="no-print flex gap-1 mb-2.5 border-b border-slate-100 dark:border-darkBorder pb-2 overflow-x-auto">
+                    <button onclick="formatMd('heading')" class="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded text-slate-500 dark:text-slate-400" title="제목"><i data-lucide="heading" class="w-4 h-4"></i></button>
+                    <button onclick="formatMd('bold')" class="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded text-slate-500 dark:text-slate-400" title="볼드"><i data-lucide="bold" class="w-4 h-4"></i></button>
+                    <button onclick="formatMd('italic')" class="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded text-slate-500 dark:text-slate-400" title="기울임"><i data-lucide="italic" class="w-4 h-4"></i></button>
+                    <div class="w-px h-5 bg-slate-200 dark:bg-darkBorder mx-1 self-center"></div>
+                    <button onclick="formatMd('list')" class="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded text-slate-500 dark:text-slate-400" title="순서없는 리스트"><i data-lucide="list" class="w-4 h-4"></i></button>
+                    <button onclick="formatMd('quote')" class="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded text-slate-500 dark:text-slate-400" title="인용구"><i data-lucide="quote" class="w-4 h-4"></i></button>
+                    <button onclick="formatMd('todo')" class="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded text-indigo-600 dark:text-indigo-400" title="Action Item 할 일 생성"><i data-lucide="square-check" class="w-4 h-4"></i></button>
                 </div>
 
-                <textarea id="finalText" class="w-full flex-1 bg-slate-50 dark:bg-slate-900/50 rounded-xl p-4 outline-none resize-none leading-relaxed font-mono" placeholder="최종 요약본이 이곳에 작성됩니다..."></textarea>
+                <textarea id="finalText" class="w-full flex-1 bg-slate-50/50 dark:bg-slate-900/40 rounded-xl p-4 outline-none resize-none leading-relaxed font-mono text-sm focus:ring-1 focus:ring-slate-300 dark:focus:ring-slate-700 transition" placeholder="최종 요약 또는 템플릿 완성본이 여기에 입력됩니다..."></textarea>
                 
-                <!-- 하단 할 일 인터랙티브 체크보드 -->
-                <div class="no-print mt-4 p-3 bg-slate-50 dark:bg-slate-900/50 rounded-xl border border-slate-100 dark:border-slate-800">
-                    <div class="flex items-center justify-between mb-2">
-                        <span class="text-[10px] font-black text-indigo-600 uppercase">Action Items 트래커</span>
-                        <span id="taskCounter" class="text-[9px] text-slate-400">0개 완료</span>
+                <div class="no-print mt-4 p-4 bg-slate-50 dark:bg-slate-900/60 rounded-xl border border-slate-100 dark:border-darkBorder space-y-3">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center gap-1.5">
+                            <span class="text-[10px] font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-widest">Enterprise Action Items 트래커</span>
+                            <span class="text-[9px] bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 px-2 py-0.5 rounded-full font-bold">실시간 가공 완료</span>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <span id="taskCounter" class="text-[10px] text-slate-500 dark:text-slate-400 font-bold">0개 할 일 목록</span>
+                            <button onclick="addInstantTodo()" class="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1">
+                                <i data-lucide="plus-square" class="w-3.5 h-3.5"></i> 새 할 일 추가
+                            </button>
+                        </div>
                     </div>
-                    <div id="todoBoard" class="space-y-1.5 max-h-32 overflow-y-auto">
-                        <p class="text-[10px] text-slate-400 italic">요약본에 - [ ] 형태의 할 일을 추가하면 이곳에 나타납니다.</p>
+                    <!-- 실시간 파싱된 담당자 및 일정, 중요도 배지가 출력될 영역 -->
+                    <div id="todoBoard" class="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-56 overflow-y-auto pr-1">
+                        <p class="text-[10px] text-slate-400 dark:text-slate-500 italic text-center col-span-2 py-4">요약록에 - [ ] [담당자] 할일 (~기한) [우선순위] 형태의 마크다운을 추가해 보세요. 실무 우선순위 트래커와 실시간 바인딩됩니다.</p>
                     </div>
                 </div>
             </div>
         </section>
     </main>
 
-    <!-- 보관함 모달 -->
-    <div id="archiveModal" class="no-print fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm hidden">
-        <div class="bg-white dark:bg-darkCard rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4">
-            <div class="flex items-center justify-between">
-                <h3 class="font-bold flex items-center gap-2"><i data-lucide="archive" class="text-indigo-500"></i> 회의 보관함</h3>
-                <button onclick="toggleArchiveModal(false)"><i data-lucide="x" class="w-5 h-5"></i></button>
+    <div id="archiveModal" class="no-print fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm hidden">
+        <div class="bg-white dark:bg-darkCard rounded-2xl max-w-xl w-full p-6 shadow-2xl border border-slate-200 dark:border-darkBorder space-y-4 transform transition-all">
+            <div class="flex items-center justify-between border-b border-slate-100 dark:border-darkBorder pb-3">
+                <div class="flex items-center space-x-2">
+                    <div class="p-1.5 bg-indigo-100 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 rounded-lg">
+                        <i data-lucide="archive" class="w-5 h-5"></i>
+                    </div>
+                    <h3 class="font-bold text-md text-slate-800 dark:text-white">회의 히스토리 보관함</h3>
+                </div>
+                <button onclick="toggleArchiveModal(false)" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition">
+                    <i data-lucide="x" class="w-5.5 h-5.5"></i>
+                </button>
             </div>
-            <!-- 검색바 추가 -->
+            <!-- 검색 및 카테고리 필터 -->
             <div class="relative">
-                <i data-lucide="search" class="absolute left-3 top-2.5 w-4 h-4 text-slate-400"></i>
-                <input type="text" id="archiveSearch" oninput="filterArchive()" class="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl pl-9 pr-4 py-2 text-sm outline-none" placeholder="제목이나 참석자 검색...">
+                <i data-lucide="search" class="absolute left-3.5 top-3 w-4 h-4 text-slate-400"></i>
+                <input type="text" id="archiveSearch" oninput="filterArchive()" class="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-darkBorder rounded-xl pl-10 pr-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500" placeholder="회의명, 일시, 참석자, 원본 및 요약 본문 검색...">
             </div>
-            <div id="archiveList" class="space-y-2 max-h-64 overflow-y-auto pr-1"></div>
-            <div class="flex justify-end pt-2">
-                <button onclick="toggleArchiveModal(false)" class="px-5 py-2 bg-slate-100 dark:bg-slate-700 rounded-xl text-xs font-bold">닫기</button>
+            <div id="archiveList" class="space-y-2.5 max-h-72 overflow-y-auto pr-1.5"></div>
+            <div class="flex justify-between items-center pt-2 border-t border-slate-100 dark:border-darkBorder">
+                <p class="text-[10px] text-slate-400">로컬 브라우저 보안 스토리지에 데이터가 유지됩니다.</p>
+                <button onclick="toggleArchiveModal(false)" class="px-5 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-300">닫기</button>
             </div>
         </div>
     </div>
 
-    <!-- 설정 모달 -->
-    <div id="settingsModal" class="no-print fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm hidden">
-        <div class="bg-white dark:bg-darkCard rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
-            <h3 class="font-bold flex items-center gap-2"><i data-lucide="settings" class="text-indigo-500"></i> 설정</h3>
-            <div class="space-y-3">
+    <div id="settingsModal" class="no-print fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm hidden">
+        <div class="bg-white dark:bg-darkCard rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 dark:border-darkBorder space-y-4">
+            <div class="flex items-center space-x-2 border-b border-slate-100 dark:border-darkBorder pb-3">
+                <div class="p-1.5 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-lg">
+                    <i data-lucide="settings" class="w-5 h-5"></i>
+                </div>
+                <h3 class="font-bold text-md text-slate-800 dark:text-white">사용자 환경 설정</h3>
+            </div>
+            <div class="space-y-4">
                 <div>
-                    <label class="block text-[10px] font-bold text-slate-400 mb-1">Gemini API Key</label>
-                    <input type="password" id="apiKey" class="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm outline-none" placeholder="키를 입력하세요">
+                    <label class="block text-[10px] font-black text-slate-500 dark:text-slate-400 mb-1.5 uppercase tracking-wider">Gemini API Key 등록</label>
+                    <input type="password" id="apiKey" class="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-darkBorder rounded-xl px-3.5 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500" placeholder="AI 요약을 위한 API Key를 기입하세요">
+                    <p class="text-[9px] text-slate-400 mt-1">API Key가 미등록 상태일 시 시스템에 준비된 기본 인공지능 규칙 요약 템플릿으로 자동 빌드됩니다.</p>
                 </div>
                 <div>
-                    <label class="block text-[10px] font-bold text-slate-400 mb-1">음성 인식 언어</label>
-                    <select id="recLang" class="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm outline-none text-slate-900 dark:text-white">
-                        <option value="ko-KR">한국어</option>
-                        <option value="en-US">영어</option>
+                    <label class="block text-[10px] font-black text-slate-500 dark:text-slate-400 mb-1.5 uppercase tracking-wider">음성 인식 국가/언어</label>
+                    <select id="recLang" class="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-darkBorder rounded-xl px-3.5 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 dark:text-white">
+                        <option value="ko-KR">South Korea (한국어)</option>
+                        <option value="en-US">United States (English)</option>
+                        <option value="ja-JP">Japan (日本語)</option>
+                        <option value="zh-CN">China (简体中文)</option>
                     </select>
                 </div>
             </div>
-            <button onclick="saveSettings()" class="w-full py-3 bg-indigo-600 text-white rounded-xl font-bold text-xs">설정 저장</button>
-            <button onclick="toggleSettings()" class="w-full py-3 bg-slate-100 dark:bg-slate-700 rounded-xl font-bold text-xs">취소</button>
+            <div class="flex space-x-2 pt-3 border-t border-slate-100 dark:border-darkBorder">
+                <button onclick="toggleSettings()" class="flex-1 py-2.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl font-bold text-xs">취소</button>
+                <button onclick="saveSettings()" class="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-xs shadow-md shadow-indigo-600/10">환경 옵션 저장</button>
+            </div>
         </div>
     </div>
 
-    <!-- 자체 디자인 컨펌/알림 모달 (alert / confirm 금지 룰 준수) -->
-    <div id="confirmModal" class="no-print fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm hidden">
-        <div class="bg-white dark:bg-darkCard rounded-2xl max-w-xs w-full p-5 shadow-2xl text-center space-y-4 animate-scaleUp">
-            <div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-amber-100 dark:bg-amber-900/40 text-amber-600">
+    <div id="confirmModal" class="no-print fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm hidden">
+        <div class="bg-white dark:bg-darkCard rounded-2xl max-w-xs w-full p-5 shadow-2xl text-center space-y-4 border border-slate-200 dark:border-darkBorder">
+            <div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400">
                 <i data-lucide="alert-triangle" class="w-6 h-6"></i>
             </div>
             <div>
-                <h4 class="font-bold text-sm text-slate-900 dark:text-white" id="confirmTitle">알림</h4>
-                <p class="text-xs text-slate-500 dark:text-slate-400 mt-1" id="confirmMessage">정말 진행하시겠습니까?</p>
+                <h4 class="font-bold text-sm text-slate-900 dark:text-white" id="confirmTitle">경고</h4>
+                <p class="text-xs text-slate-500 dark:text-slate-400 mt-1.5" id="confirmMessage">정말 진행하시겠습니까?</p>
             </div>
             <div class="flex space-x-2">
-                <button id="btnConfirmCancel" onclick="handleCustomConfirm(false)" class="flex-1 py-2 bg-slate-100 dark:bg-slate-700 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-300">취소</button>
+                <button id="btnConfirmCancel" onclick="handleCustomConfirm(false)" class="flex-1 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-300">취소</button>
                 <button id="btnConfirmOk" onclick="handleCustomConfirm(true)" class="flex-1 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-md">확인</button>
             </div>
         </div>
     </div>
 
-    <!-- 토스트 알림 -->
-    <div id="toast" class="no-print fixed bottom-6 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-[11px] px-4 py-2.5 rounded-full shadow-2xl opacity-0 transition-opacity duration-300 pointer-events-none z-50"></div>
+    <!-- 토스트 알림 컴포넌트 -->
+    <div id="toast" class="no-print fixed bottom-6 left-1/2 -translate-x-1/2 bg-slate-900/95 dark:bg-slate-100/95 text-white dark:text-slate-900 text-xs px-4 py-3 rounded-2xl shadow-2xl opacity-0 transition-all duration-300 pointer-events-none z-50 flex items-center gap-2 font-semibold"></div>
 
     <script>
         let recognition = null;
@@ -314,18 +519,34 @@
         let durationSeconds = 0;
         let durationInterval = null;
 
+        // 미디어 녹음 및 오디오 버퍼 변수 추가
+        let mediaRecorder = null;
+        let audioChunks = [];
+        let backupAudioUrl = null;
+
+        // 오디오 비주얼라이저 글로벌 객체
+        let audioCtx = null;
+        let analyser = null;
+        let dataArray = null;
+        let visualizerAnimFrame = null;
+
         const DB_KEY = 'm_minutes_db_v2';
         const CONFIG_KEY = 'm_minutes_config';
 
-        // 커스텀 컨펌 관련 콜백 홀더
         let customConfirmCallback = null;
+
+        // 문서 내 단어 찾기 상태 변수
+        let localSearchResults = [];
+        let currentSearchIndex = -1;
 
         window.onload = () => {
             lucide.createIcons();
             initApp();
             initTheme();
+            setupInitialCanvas();
+            drawApprovalLine(); // 결재선 그리기 가동
             
-            // 실시간 투두 감지 및 자동 저장 이벤트 연동
+            // 실시간 양방향 싱크 및 바인딩 트리거 등록
             document.getElementById('finalText').addEventListener('input', () => {
                 renderTodos();
                 autoSave();
@@ -335,7 +556,80 @@
             });
         };
 
-        // 앱 초기동작
+        // 기안자 검토자 승인자 명단 동적 연계 기능
+        function drawApprovalLine() {
+            const val1 = document.getElementById('apprName1').value || '기안/담당자';
+            const val2 = document.getElementById('apprName2').value || '검토/팀장';
+            const val3 = document.getElementById('apprName3').value || '승인/본부장';
+
+            const p1 = val1.split('/');
+            const p2 = val2.split('/');
+            const p3 = val3.split('/');
+
+            document.getElementById('apprRole1').innerText = p1[0] || '기안';
+            document.getElementById('apprUser1').innerText = p1[1] || '담당자';
+
+            document.getElementById('apprRole2').innerText = p2[0] || '검토';
+            document.getElementById('apprUser2').innerText = p2[1] || '검토자';
+
+            document.getElementById('apprRole3').innerText = p3[0] || '승인';
+            document.getElementById('apprUser3').innerText = p3[1] || '승인자';
+        }
+
+        function toggleCorporatePanel() {
+            const panel = document.getElementById('corporatePanel');
+            panel.classList.toggle('hidden');
+        }
+
+        function toggleApprovalLineVisibility() {
+            const display = document.getElementById('approvalLineDisplay');
+            const btn = document.getElementById('btnToggleApproval');
+            if (display.classList.contains('hidden')) {
+                display.classList.remove('hidden');
+                btn.innerText = '결재선 숨기기';
+            } else {
+                display.classList.add('hidden');
+                btn.innerText = '결재선 활성화';
+            }
+        }
+
+        // 사내 메신저 슬랙 / 팀즈 전송 규격 정제 추출기
+        function copyMessengerFormat(type) {
+            const title = document.getElementById('meetingTitle').value || '주간 실무 회의';
+            const date = document.getElementById('meetingDate').value || '일시 미지정';
+            const attendees = document.getElementById('meetingAttendees').value || '기획단 전원';
+            
+            // 캐싱된 할 일 목록 취합
+            let todoString = '';
+            if (window.cachedTodos && window.cachedTodos.length > 0) {
+                window.cachedTodos.forEach(item => {
+                    const statusEmoji = item.checked ? '✅' : '⬜';
+                    const assigneeText = item.assignee ? ` [${item.assignee}]` : '';
+                    const dueText = item.deadline ? ` (~${item.deadline})` : '';
+                    const priText = item.priority ? ` [우선순위: ${item.priority}]` : '';
+                    todoString += `${statusEmoji}${assigneeText} ${item.text}${dueText}${priText}\n`;
+                });
+            } else {
+                todoString = ' - 할 일 계획이 없습니다.\n';
+            }
+
+            let outputText = '';
+            if (type === 'slack') {
+                outputText = `*📢 회의록 실시간 공유 [Slack]*\n====================\n*📌 회의명*: ${title}\n*📅 일시*: ${date}\n*👥 참석자*: ${attendees}\n\n*🚀 후속 Action Items*\n${todoString}====================\n*상세 요약은 시스템 사내 보관함에서 확인 바랍니다.*`;
+            } else {
+                outputText = `📢 **회의록 실시간 공유 [MS Teams]**\n====================\n* **회의명**: ${title}\n* **일시**: ${date}\n* **참석자**: ${attendees}\n\n**🚀 후속 Action Items**\n${todoString}====================\n*상세 요약은 시스템 사내 보관함에서 확인 바랍니다.*`;
+            }
+
+            const el = document.createElement('textarea');
+            el.value = outputText;
+            document.body.appendChild(el);
+            el.select();
+            document.execCommand('copy');
+            document.body.removeChild(el);
+            showToast(`${type.toUpperCase()} 복사 완료! 메신저 창에 붙여넣기(Ctrl+V) 하세요.`);
+        }
+
+        // 앱 초기 환경 빌드
         function initApp() {
             const db = getDB();
             if (db.length > 0) {
@@ -372,7 +666,6 @@
             }
         }
 
-        // 폰트 크기 관리
         let fontSizeIdx = 1; // 0:small, 1:base, 2:large
         const fontClasses = ['font-size-small', 'font-size-base', 'font-size-large'];
         const fontLabels = ['가-', '가', '가+'];
@@ -382,10 +675,10 @@
             document.body.classList.remove(...fontClasses);
             document.body.classList.add(fontClasses[fontSizeIdx]);
             document.getElementById('fontSizeLabel').innerText = fontLabels[fontSizeIdx];
-            showToast(`글자 크기가 변경되었습니다: ${fontLabels[fontSizeIdx]}`);
+            showToast(`글자 크기가 ${fontLabels[fontSizeIdx]} 타입으로 변경되었습니다.`);
         }
 
-        // 타이머 관리
+        // 시간 측정 관리자
         function startDurationTimer() {
             if (durationInterval) clearInterval(durationInterval);
             durationInterval = setInterval(() => {
@@ -397,13 +690,102 @@
             }, 1000);
         }
 
-        // 보관함 필터링
+        function toggleLocalSearch(show = null) {
+            const container = document.getElementById('localSearchContainer');
+            const isHidden = container.classList.contains('hidden');
+            const targetShow = show !== null ? show : isHidden;
+            
+            container.classList.toggle('hidden', !targetShow);
+            if (targetShow) {
+                document.getElementById('localSearchInput').focus();
+                searchInCurrentEditor();
+            } else {
+                document.getElementById('localSearchInput').value = '';
+                resetLocalSearchHighlight();
+            }
+        }
+
+        function searchInCurrentEditor() {
+            const query = document.getElementById('localSearchInput').value.toLowerCase().trim();
+            const countLabel = document.getElementById('localSearchCount');
+            
+            localSearchResults = [];
+            currentSearchIndex = -1;
+
+            if (!query) {
+                countLabel.innerText = '0개 발견';
+                resetLocalSearchHighlight();
+                return;
+            }
+
+            const rawTextarea = document.getElementById('rawText');
+            const finalTextarea = document.getElementById('finalText');
+
+            // 대화 스크립트 검색
+            findMatchesInTextarea(rawTextarea, 'rawText', query);
+            // 요약문 본문 검색
+            findMatchesInTextarea(finalTextarea, 'finalText', query);
+
+            countLabel.innerText = `${localSearchResults.length}개 발견`;
+            
+            if (localSearchResults.length > 0) {
+                currentSearchIndex = 0;
+                highlightSearchResult();
+            }
+        }
+
+        function findMatchesInTextarea(textarea, elementId, query) {
+            const text = textarea.value.toLowerCase();
+            let index = text.indexOf(query);
+            while (index !== -1) {
+                localSearchResults.push({
+                    elementId: elementId,
+                    start: index,
+                    end: index + query.length
+                });
+                index = text.indexOf(query, index + 1);
+            }
+        }
+
+        function highlightSearchResult() {
+            if (localSearchResults.length === 0 || currentSearchIndex === -1) return;
+            
+            const match = localSearchResults[currentSearchIndex];
+            const textarea = document.getElementById(match.elementId);
+            
+            textarea.focus();
+            textarea.setSelectionRange(match.start, match.end);
+            
+            // 일치 구역으로 강제 스크롤 최적화
+            const approxLineHeight = 21;
+            const textBefore = textarea.value.substring(0, match.start);
+            const linesBefore = textBefore.split('\n').length;
+            textarea.scrollTop = Math.max(0, (linesBefore - 3) * approxLineHeight);
+            
+            showToast(`[${currentSearchIndex + 1} / ${localSearchResults.length}] 검색 일치 구역으로 이동함`);
+        }
+
+        function navigateLocalSearch(direction) {
+            if (localSearchResults.length === 0) return;
+            if (direction === 'next') {
+                currentSearchIndex = (currentSearchIndex + 1) % localSearchResults.length;
+            } else {
+                currentSearchIndex = (currentSearchIndex - 1 + localSearchResults.length) % localSearchResults.length;
+            }
+            highlightSearchResult();
+        }
+
+        function resetLocalSearchHighlight() {
+            document.getElementById('rawText').setSelectionRange(0, 0);
+            document.getElementById('finalText').setSelectionRange(0, 0);
+        }
+
+        // 보관함 검색 필터링 핸들러 (본문 내 검색 관통 포함)
         function filterArchive() {
             const query = document.getElementById('archiveSearch').value.toLowerCase();
             renderArchive(query);
         }
 
-        // 마크다운 서식 툴바 삽입
         function formatMd(type) {
             const el = document.getElementById('finalText');
             const start = el.selectionStart;
@@ -413,17 +795,17 @@
             let result = '';
 
             switch(type) {
+                case 'heading': result = `\n### ${selected}`; break;
                 case 'bold': result = `**${selected}**`; break;
                 case 'italic': result = `*${selected}*`; break;
                 case 'list': result = `\n- ${selected}`; break;
                 case 'quote': result = `\n> ${selected}`; break;
-                case 'todo': result = `\n- [ ] ${selected}`; break;
+                case 'todo': result = `\n- [ ] [담당자] ${selected} (~07-30) [높음]`; break;
             }
 
             el.value = text.substring(0, start) + result + text.substring(end);
             el.focus();
             
-            // 마크다운 삽입된 후 자동 포커싱 처리
             const nextPos = start + result.length;
             el.setSelectionRange(nextPos, nextPos);
             
@@ -431,12 +813,12 @@
             renderTodos();
         }
 
-        // DB 핸들러
+        // 로컬 데이터 관리
         function getDB() { return JSON.parse(localStorage.getItem(DB_KEY) || '[]'); }
         function saveDB(db) { localStorage.setItem(DB_KEY, JSON.stringify(db)); }
         function getConfig() { return JSON.parse(localStorage.getItem(CONFIG_KEY) || '{"apiKey":"","lang":"ko-KR"}'); }
 
-        // 신규 회의 생성
+        // 신규 회의 신속 개설
         function createNewMeeting() {
             const newId = 'm_' + Date.now();
             const now = new Date();
@@ -444,7 +826,7 @@
             
             const session = {
                 id: newId,
-                title: '신규 주간 회의록',
+                title: '신규 전략 회의록',
                 date: now.toISOString().slice(0, 16),
                 attendees: '',
                 raw: '',
@@ -457,11 +839,14 @@
             saveDB(db);
             loadSession(newId);
             updateArchiveBadge();
-            durationSeconds = 0; // 타이머 리셋
-            showToast('새 회의록이 생성되었습니다.');
+            durationSeconds = 0;
+            // 오디오 버퍼 리셋
+            document.getElementById('downloadVoiceBtn').classList.add('hidden');
+            backupAudioUrl = null;
+            showToast('새 회의록 템플릿이 개설되었습니다.');
         }
 
-        // 세션 로드
+        // 회의 세션 백업 복원
         function loadSession(id) {
             const db = getDB();
             const m = db.find(x => x.id === id);
@@ -473,10 +858,15 @@
                 document.getElementById('rawText').value = m.raw || '';
                 document.getElementById('finalText').value = m.final || '';
                 renderTodos();
+                
+                // 검색 바가 열려있을 시 싱크 업데이트
+                if (!document.getElementById('localSearchContainer').classList.contains('hidden')) {
+                    searchInCurrentEditor();
+                }
             }
         }
 
-        // 동기화 자동 백업
+        // 세션 자동동기화
         function autoSave() {
             if (!activeId) return;
             const db = getDB();
@@ -491,13 +881,110 @@
                 saveDB(db);
             }
             const status = document.getElementById('saveStatus');
-            status.innerHTML = '<span class="w-1.5 h-1.5 bg-indigo-500 rounded-full animate-ping"></span>저장 중';
+            status.innerHTML = '<span class="w-1.5 h-1.5 bg-indigo-500 rounded-full animate-ping"></span>자동 보존 중';
             setTimeout(() => {
-                if (status) status.innerHTML = '<span class="w-1.5 h-1.5 bg-emerald-500 rounded-full"></span>동기화됨';
+                if (status) status.innerHTML = '<span class="w-1.5 h-1.5 bg-emerald-500 rounded-full"></span>동기화 완료';
             }, 600);
         }
 
-        // 자체 음성 인식 (STT) 엔진 기동
+        function setupInitialCanvas() {
+            const canvas = document.getElementById('visualizerCanvas');
+            const ctx = canvas.getContext('2d');
+            canvas.width = canvas.parentElement.clientWidth;
+            canvas.height = 60;
+            
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.strokeStyle = '#94a3b8';
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.moveTo(0, canvas.height / 2);
+            ctx.lineTo(canvas.width, canvas.height / 2);
+            ctx.stroke();
+        }
+
+        function drawVisualizer() {
+            const canvas = document.getElementById('visualizerCanvas');
+            const ctx = canvas.getContext('2d');
+            const width = canvas.width;
+            const height = canvas.height;
+            let step = 0;
+
+            function animate() {
+                if (!isRecording) {
+                    setupInitialCanvas();
+                    return;
+                }
+                visualizerAnimFrame = requestAnimationFrame(animate);
+                ctx.clearRect(0, 0, width, height);
+
+                let volume = 0;
+                if (analyser) {
+                    analyser.getByteFrequencyData(dataArray);
+                    let sum = 0;
+                    for (let i = 0; i < dataArray.length; i++) {
+                        sum += dataArray[i];
+                    }
+                    volume = sum / dataArray.length;
+                } else {
+                    volume = 30 + Math.sin(Date.now() * 0.005) * 15;
+                }
+
+                step += 0.08;
+                
+                for (let wave = 0; wave < 3; wave++) {
+                    ctx.beginPath();
+                    ctx.lineWidth = wave === 0 ? 2 : 1;
+                    ctx.strokeStyle = wave === 0 ? 'rgba(79, 70, 229, 0.8)' : wave === 1 ? 'rgba(124, 58, 237, 0.5)' : 'rgba(16, 185, 129, 0.3)';
+                    
+                    for (let x = 0; x < width; x++) {
+                        const angle = (x / width) * Math.PI * 4 + step + (wave * 1.5);
+                        const amp = (Math.sin(angle) * (volume * 0.4) * Math.sin((x / width) * Math.PI));
+                        const y = height / 2 + amp;
+                        if (x === 0) {
+                            ctx.moveTo(x, y);
+                        } else {
+                            ctx.lineTo(x, y);
+                        }
+                    }
+                    ctx.stroke();
+                }
+            }
+            animate();
+        }
+
+        async function connectAudioSource() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                analyser = audioCtx.createAnalyser();
+                const source = audioCtx.createMediaStreamSource(stream);
+                source.connect(analyser);
+                analyser.fftSize = 256;
+                const bufferLength = analyser.frequencyBinCount;
+                dataArray = new Uint8Array(bufferLength);
+                
+                // 오디오 레코더 동시 초기화
+                audioChunks = [];
+                mediaRecorder = new MediaRecorder(stream);
+                mediaRecorder.ondataavailable = (event) => {
+                    if (event.data.size > 0) {
+                        audioChunks.push(event.data);
+                    }
+                };
+                mediaRecorder.onstop = () => {
+                    const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                    backupAudioUrl = URL.createObjectURL(audioBlob);
+                    document.getElementById('downloadVoiceBtn').classList.remove('hidden');
+                    showToast('성공적으로 증빙용 고품질 음성 백업 파일이 인코딩되었습니다.');
+                };
+                mediaRecorder.start();
+            } catch (err) {
+                console.warn("마이크 스트림 연동 제한으로 가상 파형 및 시뮬레이션 인식이 가동됩니다.");
+                analyser = null;
+                mediaRecorder = null;
+            }
+        }
+
         function setupSpeechRecognition() {
             window.SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
             if (window.SpeechRecognition) {
@@ -508,14 +995,13 @@
 
                 recognition.onstart = () => {
                     isRecording = true;
-                    document.getElementById('micWaves').classList.remove('hidden');
-                    document.getElementById('micIdle').classList.add('hidden');
                     document.getElementById('btnStartSTT').classList.add('hidden');
                     document.getElementById('btnStopSTT').classList.remove('hidden');
-                    document.getElementById('recStatus').innerText = '녹음 분석 중...';
+                    document.getElementById('recStatus').innerText = '음성 분석 및 기입 진행 중';
                     
-                    // 데시벨 바 애니메이션 시뮬레이션 기동
-                    runWaveBars(true);
+                    connectAudioSource().then(() => {
+                        drawVisualizer();
+                    });
                 };
 
                 recognition.onresult = (e) => {
@@ -532,92 +1018,136 @@
 
                 recognition.onend = () => {
                     if (isRecording) {
-                        recognition.start(); // 강제 중단 시 즉시 재연동
+                        recognition.start();
                     } else {
                         resetMicUI();
                     }
                 };
+
+                recognition.onerror = () => {
+                    resetMicUI();
+                };
+            } else {
+                showToast("현재 사용하시는 브라우저는 실시간 음성 인식을 공식 지원하지 않습니다.");
             }
         }
 
         function startSpeechRecognition() {
             if (!recognition) setupSpeechRecognition();
-            if (recognition) recognition.start();
+            if (recognition) {
+                recognition.start();
+            } else {
+                isRecording = true;
+                document.getElementById('btnStartSTT').classList.add('hidden');
+                document.getElementById('btnStopSTT').classList.remove('hidden');
+                document.getElementById('recStatus').innerText = '가상 레코딩 진행 중';
+                drawVisualizer();
+            }
         }
 
         function stopSpeechRecognition() {
             isRecording = false;
             if (recognition) recognition.stop();
+            if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                mediaRecorder.stop();
+            }
+            if (visualizerAnimFrame) cancelAnimationFrame(visualizerAnimFrame);
+            if (audioCtx) {
+                audioCtx.close();
+                audioCtx = null;
+            }
             resetMicUI();
         }
 
+        function downloadVoiceBackup() {
+            if (!backupAudioUrl) return showToast("사용 가능한 백업 녹음 파일이 존재하지 않습니다.");
+            const a = document.createElement('a');
+            a.href = backupAudioUrl;
+            a.download = `voice_backup_${Date.now()}.webm`;
+            a.click();
+            showToast("회의 음성 백업 파일 다운로드가 시작되었습니다.");
+        }
+
         function resetMicUI() {
-            document.getElementById('micWaves').classList.add('hidden');
-            document.getElementById('micIdle').classList.remove('hidden');
             document.getElementById('btnStartSTT').classList.remove('hidden');
             document.getElementById('btnStopSTT').classList.add('hidden');
-            document.getElementById('recStatus').innerText = '인식 대기 중';
-            runWaveBars(false);
+            document.getElementById('recStatus').innerText = '마이크 대기 상태';
+            setupInitialCanvas();
         }
 
-        // 데시벨 시각적 이펙트 제어
-        let waveTimer = null;
-        function runWaveBars(active) {
-            const bars = document.querySelectorAll('.wave-bar');
-            if (active) {
-                waveTimer = setInterval(() => {
-                    bars.forEach(bar => {
-                        bar.style.height = `${Math.floor(Math.random() * 30) + 6}px`;
-                    });
-                }, 150);
-            } else {
-                clearInterval(waveTimer);
-                bars.forEach(bar => bar.style.height = '8px');
-            }
-        }
-
-        // 요약본 내 마크다운 투두와 하단 UI 동적 연계 제어
+        // 담당자, 마감 기한, 우선순위 배지 연동 추출기
         function renderTodos() {
             const text = document.getElementById('finalText').value;
             const container = document.getElementById('todoBoard');
-            const regex = /^\s*-\s*\[\s*([ xX]?)\s*\]\s*(.+)$/gm;
+            
+            // 향상된 정규식: - [ ] [담당자] 업무내용 (~마감일) [우선순위]
+            const regex = /^\s*-\s*\[\s*([ xX]?)\s*\]\s*(?:\[([^\]]+)\])?\s*([^~\[\n\r]+)(?:\(~([^)]+)\))?\s*(?:\[([^\]]+)\])?$/gm;
             let match;
             let count = 0, done = 0, html = '';
             let matchesList = [];
 
             while ((match = regex.exec(text)) !== null) {
                 const isChecked = match[1].toLowerCase() === 'x';
-                const todoText = match[2].trim();
+                const assignee = match[2] ? match[2].trim() : '';
+                const todoText = match[3] ? match[3].trim() : '';
+                const deadline = match[4] ? match[4].trim() : '';
+                const priority = match[5] ? match[5].trim() : '';
                 const fullLine = match[0];
                 const lineIndex = match.index;
                 
-                matchesList.push({ checked: isChecked, text: todoText, fullLine, index: lineIndex });
+                matchesList.push({ 
+                    checked: isChecked, 
+                    assignee, 
+                    text: todoText, 
+                    deadline, 
+                    priority, 
+                    fullLine, 
+                    index: lineIndex 
+                });
                 count++;
                 if (isChecked) done++;
             }
 
             if (count > 0) {
                 matchesList.forEach((todo, idx) => {
+                    // 우선순위별 스타일링 배지 가공
+                    let priorityClass = "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300";
+                    if (todo.priority === '높음' || todo.priority === '긴급') {
+                        priorityClass = "bg-rose-100 text-rose-700 dark:bg-rose-950/40 dark:text-rose-400";
+                    } else if (todo.priority === '보통' || todo.priority === '중간') {
+                        priorityClass = "bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400";
+                    } else if (todo.priority === '낮음') {
+                        priorityClass = "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400";
+                    }
+
                     html += `
-                        <div class="flex items-center gap-2 bg-white dark:bg-slate-800 p-2 rounded-lg border border-slate-100 dark:border-slate-700 hover:border-indigo-400 transition">
-                            <input type="checkbox" ${todo.checked ? 'checked' : ''} 
-                                onchange="toggleTodoOnEditor(${idx}, this.checked)" 
-                                class="w-3.5 h-3.5 rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer">
-                            <span class="text-[10px] ${todo.checked ? 'line-through text-slate-400' : 'text-slate-600 dark:text-slate-300'} font-bold truncate flex-1">${todo.text}</span>
+                        <div class="flex flex-col p-3 bg-white dark:bg-slate-800 rounded-xl border border-slate-150 dark:border-darkBorder hover:border-indigo-400 dark:hover:border-indigo-500/50 transition gap-2">
+                            <div class="flex items-center gap-2">
+                                <input type="checkbox" ${todo.checked ? 'checked' : ''} 
+                                    onchange="toggleTodoOnEditor(${idx}, this.checked)" 
+                                    class="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer">
+                                <span class="text-xs ${todo.checked ? 'line-through text-slate-400 dark:text-slate-500' : 'text-slate-700 dark:text-slate-200'} font-bold truncate flex-1">${todo.text}</span>
+                                <button onclick="deleteTodoOnEditor(${idx})" class="p-1 hover:text-rose-500 text-slate-300 dark:text-slate-600 transition"><i data-lucide="trash" class="w-3.5 h-3.5"></i></button>
+                            </div>
+                            <div class="flex flex-wrap items-center gap-1.5 text-[9px] font-semibold mt-1">
+                                ${todo.assignee ? `<span class="bg-indigo-50 text-indigo-700 dark:bg-indigo-950/50 dark:text-indigo-400 px-2 py-0.5 rounded-md border border-indigo-100 dark:border-indigo-900/40"><i data-lucide="user" class="w-2.5 h-2.5 inline mr-1"></i>${todo.assignee}</span>` : ''}
+                                ${todo.deadline ? `<span class="bg-blue-50 text-blue-700 dark:bg-blue-950/50 dark:text-blue-400 px-2 py-0.5 rounded-md border border-blue-100 dark:border-blue-900/40"><i data-lucide="calendar" class="w-2.5 h-2.5 inline mr-1"></i>기한: ${todo.deadline}</span>` : ''}
+                                ${todo.priority ? `<span class="${priorityClass} px-2 py-0.5 rounded-md"><i data-lucide="flag" class="w-2.5 h-2.5 inline mr-1"></i>${todo.priority}</span>` : ''}
+                            </div>
                         </div>
                     `;
                 });
                 container.innerHTML = html;
                 document.getElementById('taskCounter').innerText = `${done}/${count} 완료`;
             } else {
-                container.innerHTML = '<p class="text-[10px] text-slate-400 italic">감지된 할 일이 없습니다.</p>';
-                document.getElementById('taskCounter').innerText = '0개 완료';
+                container.innerHTML = '<p class="text-[10px] text-slate-400 dark:text-slate-500 italic text-center col-span-2 py-4">요약록에 - [ ] [담당자] 할일 (~기한) [우선순위] 형태의 마크다운을 추가해 보세요. 실무 우선순위 트래커와 실시간 바인딩됩니다.</p>';
+                document.getElementById('taskCounter').innerText = '0개 목록';
             }
 
             window.cachedTodos = matchesList;
+            lucide.createIcons();
         }
 
-        // 하단 체크박스 터치 시 상단 원본 마크다운 텍스트 자동 동기화 가공
         function toggleTodoOnEditor(index, isChecked) {
             if (!window.cachedTodos || !window.cachedTodos[index]) return;
             const target = window.cachedTodos[index];
@@ -632,19 +1162,63 @@
             renderTodos();
         }
 
-        // AI 기반 회의 요약 비서 가동
+        function addInstantTodo() {
+            const editor = document.getElementById('finalText');
+            const textToAppend = "\n- [ ] [기획파트] 신규 기획안 마일스톤 설계 검토 (~08-10) [높음]";
+            editor.value = editor.value + textToAppend;
+            autoSave();
+            renderTodos();
+            showToast("Action Item 실무 템플릿 항목이 삽입되었습니다.");
+        }
+
+        function deleteTodoOnEditor(index) {
+            if (!window.cachedTodos || !window.cachedTodos[index]) return;
+            const target = window.cachedTodos[index];
+            const editor = document.getElementById('finalText');
+            
+            editor.value = editor.value.replace(target.fullLine + '\n', '').replace(target.fullLine, '');
+            autoSave();
+            renderTodos();
+            showToast("할 일이 삭제되었습니다.");
+        }
+
+        const templatePrompts = {
+            standard: `회의 녹취록을 바탕으로 전문적인 주간 실무 회의록을 작성해주세요.
+- 주요 어젠다별로 명확하게 서브 파트를 나눠 정리해주세요.
+- 결정된 기획안과 논의 사항을 체계적으로 서술하세요.
+- 향후 과제 및 담당 부서는 '- [ ] [담당자] 업무계획 (~완료희망일) [우선순위]' 형태의 마크다운 형식으로 3가지 이상 상세히 정리해주세요.`,
+
+            sprint: `개발 팀의 스프린트 계획 및 데일리 회고를 위한 미팅노트를 작성해주세요.
+- **스프린트 목표** 및 현재 완료 상태를 세션별로 분류하세요.
+- 각 업무 영역의 지연 사항이나 이슈 트래킹 요소(Blokers)를 구체적으로 수록하세요.
+- 태스크 배정은 반드시 '- [ ] [작업자명] 작업 상세내용 (~마감기한) [긴급]' 형태의 투두리스트 마크다운으로 추출하세요.`,
+
+            brainstorming: `브레인스토밍 세션에서 도출된 창의적인 생각과 아이디어를 구조화하여 정리해주세요.
+- 제안된 아이디어의 '가설', '기대 효과', '검증 전략'을 분할해 분석하세요.
+- 실행 타당성이 유력해 보이는 아이디어들은 우선순위별로 나열하세요.
+- 다음 단계 검증 업무는 '- [ ] [검증자] 상세업무 (~일정) [보통]' 형태의 액션 아이템 마크다운으로 포함시켜 주세요.`,
+
+            sales: `영업 상담 미팅 및 대외 파트너십 제안용 회의록을 가공해주세요.
+- 파트너사의 핵심 요구조건 및 고충(Pain Points)을 상세히 기록하세요.
+- 당사의 제안 내용과 그에 따른 고객 피드백 반응을 나누어 기술하세요.
+- 계약 실행 또는 피드백 후속 미팅 계획은 '- [ ] [담당부서] 업무내용 (~마감시한) [높음]' 마크다운 할 일로 배치하세요.`
+        };
+
         async function runAI() {
             const raw = document.getElementById('rawText').value.trim();
             const config = getConfig();
-            if (!raw) return showToast('원본 내용이 없습니다.');
+            const selectedTemplateType = document.getElementById('summaryTemplate').value;
+            
+            if (!raw) return showToast('요약할 대화 스크립트가 존재하지 않습니다.');
             
             document.getElementById('aiLoader').classList.remove('hidden');
             
             if (config.apiKey) {
-                // 구글 Gemini 2.5 API 실제 통신
                 try {
-                    const prompt = `회의 녹취록을 바탕으로 실무용 회의록을 정교하게 작성해줘. 마크다운 형식을 적극 활용하고, 결정된 사항 및 향후 일정, 담당자별 실행 목표를 반드시 포함해줘. 할 일 항목은 반드시 '- [ ] 담당자: 업무 내용' 형식으로 적어줘. \n\n녹취록:\n${raw}`;
-                    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${config.apiKey}`, {
+                    const promptTemplateText = templatePrompts[selectedTemplateType] || templatePrompts.standard;
+                    const prompt = `${promptTemplateText}\n\n[녹취 스크립트 원본]:\n${raw}`;
+                    
+                    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${config.apiKey}`, {
                         method: 'POST',
                         headers: {'Content-Type': 'application/json'},
                         body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
@@ -657,70 +1231,72 @@
                     document.getElementById('finalText').value = result;
                     renderTodos();
                     autoSave();
-                    showToast('AI 요약본이 생성되었습니다.');
+                    showToast('AI 요약 회의록이 고품질 프리셋으로 생성되었습니다.');
                 } catch (e) {
-                    showToast('AI 분석 중 서버 통신 에러가 발생하여 로컬 요약으로 대체합니다.');
-                    simulateLocalSummary(raw);
+                    showToast('Gemini API 통신 에러가 포착되었습니다. 빌트인 로컬 빌더로 즉시 실행합니다.');
+                    simulateLocalSummary(raw, selectedTemplateType);
                 } finally {
                     document.getElementById('aiLoader').classList.add('hidden');
                 }
             } else {
-                // API 키가 세팅되지 않았을 시 오프라인 시뮬레이션 백업 기동
                 setTimeout(() => {
-                    simulateLocalSummary(raw);
+                    simulateLocalSummary(raw, selectedTemplateType);
                     document.getElementById('aiLoader').classList.add('hidden');
                 }, 1500);
             }
         }
 
-        // 오프라인 규칙 기반 요약
-        function simulateLocalSummary(rawText) {
-            const title = document.getElementById('meetingTitle').value || '업무 정기 보고';
+        function simulateLocalSummary(rawText, templateType) {
+            const title = document.getElementById('meetingTitle').value || '업무 기획 회의';
             const date = document.getElementById('meetingDate').value || new Date().toLocaleString();
-            const attendees = document.getElementById('meetingAttendees').value || '참석 위원 전원';
+            const attendees = document.getElementById('meetingAttendees').value || '기획단 전원';
 
             const sentences = rawText.split(/[.?!]|\n+/).filter(x => x.trim().length > 3);
-            let summaryBullets = "";
+            let agendaBullets = "";
             let actionBullets = "";
 
             if (sentences.length > 0) {
                 sentences.forEach((line, idx) => {
                     const clean = line.trim();
                     if (idx % 2 === 0) {
-                        summaryBullets += `- 의제 건: ${clean}\n`;
+                        agendaBullets += `- **주제 논의**: ${clean}\n`;
                     } else {
-                        actionBullets += `- [ ] [담당자 미지정] ${clean}\n`;
+                        actionBullets += `- [ ] [기획팀] ${clean} (~08-15) [보통]\n`;
                     }
                 });
             } else {
-                summaryBullets = "- 주요 핵심 어젠다 공유 완료.\n";
-                actionBullets = "- [ ] 세부 구현 사안 피드백 검토\n- [ ] 차주 마일스톤 설계 점검";
+                agendaBullets = "- 실무 중심 어젠다 공유 및 전주 피드백 점검\n";
+                actionBullets = "- [ ] [기획파트] 상세 인프라 기획안 정립 (~08-20) [높음]\n- [ ] [운영파트] 협력사 피드백 결과 검수 (~08-25) [보통]";
             }
 
-            const formatText = `## 📝 최종 회의 요약서: ${title}
+            let typeTitle = "일반 업무 정기 보고";
+            if (templateType === 'sprint') typeTitle = "개발 스프린트 데일리 레코딩";
+            if (templateType === 'brainstorming') typeTitle = "창의 혁신 아이디어 브레인세션";
+            if (templateType === 'sales') typeTitle = "B2B 영업 파트너십 비즈 미팅";
+
+            const formatText = `## 📝 [${typeTitle}] 회의 보고서: ${title}
 
 ### 📅 기본 개요
-- **일시**: ${date}
-- **참석자**: ${attendees}
+- **회의 진행 일시**: ${date}
+- **참여 세션 인원**: ${attendees}
 
 ---
 
-### 💬 주요 핵심 논의 안건
-${summaryBullets}
+### 💬 주요 의제별 디브리핑
+${agendaBullets}
 
-### 🚀 실행 업무 계획 (Action Items)
+### 🚀 후속 연계 업무 목표 (Action Items)
 ${actionBullets}
 
 ---
-*본 문서는 로컬 보조 요약 템플릿에 의해 빌드되었습니다. 최정밀 요약을 원하시면 설정에서 Gemini API Key를 등록해 주세요.*`;
+*본 요약록은 로컬 템플릿 제어 엔진으로 신속하게 구성되었습니다. 더욱 정교한 의도 파악과 비서 요약을 원하시면 환경 설정에서 Gemini API Key를 세팅해 보십시오.*`;
 
             document.getElementById('finalText').value = formatText;
             renderTodos();
             autoSave();
-            showToast('로컬 분석 요약이 신속히 생성되었습니다.');
+            showToast('로컬 프리셋 분석 요약본을 신속 생성했습니다.');
         }
 
-        // 보관함 제어
         function toggleArchiveModal(show) {
             document.getElementById('archiveModal').classList.toggle('hidden', !show);
             if (show) renderArchive();
@@ -729,32 +1305,73 @@ ${actionBullets}
         function renderArchive(query = '') {
             const db = getDB();
             const list = document.getElementById('archiveList');
+            
+            // 제목, 참석자 외에 대화 원본(raw), 최종 요약문(final)까지 실시간 쿼리 비교
             const filtered = db.filter(m => 
                 (m.title && m.title.toLowerCase().includes(query)) || 
-                (m.attendees && m.attendees.toLowerCase().includes(query))
+                (m.attendees && m.attendees.toLowerCase().includes(query)) ||
+                (m.raw && m.raw.toLowerCase().includes(query)) ||
+                (m.final && m.final.toLowerCase().includes(query))
             ).reverse();
 
-            list.innerHTML = filtered.map(m => `
-                <div class="flex items-center justify-between p-3 border border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 rounded-xl">
-                    <div onclick="selectArchive('${m.id}')" class="cursor-pointer flex-1 pr-2 min-w-0">
-                        <h4 class="text-xs font-black truncate ${m.id === activeId ? 'text-indigo-600 dark:text-indigo-400' : ''}">${m.title || '회의명 미등록'}</h4>
-                        <p class="text-[9px] text-slate-400 mt-1">${new Date(m.updatedAt).toLocaleString()}</p>
+            if (filtered.length === 0) {
+                list.innerHTML = `<p class="text-xs text-slate-400 dark:text-slate-500 text-center py-6">일치하는 회의 히스토리가 없습니다.</p>`;
+                return;
+            }
+
+            list.innerHTML = filtered.map(m => {
+                // 본문 검색어 매칭 일치 지점 스니펫 및 마크 강조 처리
+                let snippetHtml = '';
+                if (query) {
+                    const rawIndex = m.raw ? m.raw.toLowerCase().indexOf(query) : -1;
+                    const finalIndex = m.final ? m.final.toLowerCase().indexOf(query) : -1;
+                    
+                    if (rawIndex !== -1) {
+                        const start = Math.max(0, rawIndex - 15);
+                        const end = Math.min(m.raw.length, rawIndex + query.length + 20);
+                        const cleanSnippet = m.raw.substring(start, end).replace(/\n/g, ' ');
+                        const highlightSnippet = cleanSnippet.replace(new RegExp(query, 'gi'), match => `<mark class="bg-amber-200 dark:bg-amber-800 text-slate-900 dark:text-white rounded px-1 font-bold">${match}</match>`);
+                        snippetHtml = `<div class="text-[10px] text-slate-500 dark:text-slate-400 bg-slate-100/80 dark:bg-slate-950/50 p-2 rounded-xl mt-1.5 border border-slate-200/40 dark:border-slate-800/60 font-mono">.. ${highlightSnippet} ..</div>`;
+                    } else if (finalIndex !== -1) {
+                        const start = Math.max(0, finalIndex - 15);
+                        const end = Math.min(m.final.length, finalIndex + query.length + 20);
+                        const cleanSnippet = m.final.substring(start, end).replace(/\n/g, ' ');
+                        const highlightSnippet = cleanSnippet.replace(new RegExp(query, 'gi'), match => `<mark class="bg-amber-200 dark:bg-amber-800 text-slate-900 dark:text-white rounded px-1 font-bold">${match}</match>`);
+                        snippetHtml = `<div class="text-[10px] text-slate-500 dark:text-slate-400 bg-slate-100/80 dark:bg-slate-950/50 p-2 rounded-xl mt-1.5 border border-slate-200/40 dark:border-slate-800/60 font-mono">.. ${highlightSnippet} ..</div>`;
+                    }
+                }
+
+                // 제목과 참석자 검색 일치 구역 개별 강조
+                const displayTitle = query && m.title ? m.title.replace(new RegExp(query, 'gi'), match => `<mark class="bg-yellow-200 dark:bg-yellow-900/60 text-slate-900 dark:text-white rounded px-0.5">${match}</mark>`) : (m.title || '회의명 미등록');
+                const displayAttendees = query && m.attendees ? m.attendees.replace(new RegExp(query, 'gi'), match => `<mark class="bg-yellow-200 dark:bg-yellow-900/60 text-slate-900 dark:text-white rounded px-0.5">${match}</mark>`) : m.attendees;
+
+                return `
+                    <div class="flex flex-col p-3.5 border border-slate-100 dark:border-darkBorder bg-slate-50 dark:bg-slate-900 rounded-2xl hover:border-indigo-500/50 transition">
+                        <div class="flex items-center justify-between">
+                            <div onclick="selectArchive('${m.id}')" class="cursor-pointer flex-1 pr-3 min-w-0">
+                                <h4 class="text-xs font-extrabold truncate ${m.id === activeId ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-700 dark:text-slate-200'}">${displayTitle}</h4>
+                                <p class="text-[9px] text-slate-400 dark:text-slate-500 mt-1 flex items-center gap-1">
+                                    <i data-lucide="clock" class="w-3 h-3"></i> ${new Date(m.updatedAt).toLocaleString()}
+                                    ${displayAttendees ? `<span class="mx-1">|</span> <span class="truncate">${displayAttendees}</span>` : ''}
+                                </p>
+                            </div>
+                            <button onclick="deleteMeetingConfirm('${m.id}')" class="p-2 text-slate-300 dark:text-slate-600 hover:text-rose-500 transition"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                        </div>
+                        ${snippetHtml}
                     </div>
-                    <button onclick="deleteMeetingConfirm('${m.id}')" class="p-1.5 text-slate-300 hover:text-rose-500 transition"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
-                </div>
-            `).join('');
+                `;
+            }).join('');
             lucide.createIcons();
         }
 
         function selectArchive(id) {
             loadSession(id);
             toggleArchiveModal(false);
-            showToast('회의록 기록을 성공적으로 복원했습니다.');
+            showToast('성공적으로 회의록 데이터가 화면에 로드되었습니다.');
         }
 
-        // 커스텀 대화 상자 인터페이스 (alert / confirm 금지 대응)
         function deleteMeetingConfirm(id) {
-            showCustomConfirm('선택한 회의록 데이터를 영구히 완전히 삭제할까요?', () => {
+            showCustomConfirm('해당 회의록 세션을 정말 삭제할까요? 이 작업은 되돌릴 수 없습니다.', () => {
                 let db = getDB();
                 db = db.filter(x => x.id !== id);
                 saveDB(db);
@@ -764,7 +1381,7 @@ ${actionBullets}
                     renderArchive();
                 }
                 updateArchiveBadge();
-                showToast('회의록이 영구 소멸되었습니다.');
+                showToast('성공적으로 기록이 제거되었습니다.');
             });
         }
 
@@ -786,7 +1403,6 @@ ${actionBullets}
             document.getElementById('archiveBadge').innerText = getDB().length;
         }
 
-        // 커서 지점에 텍스트 퀵 삽입
         function insertAtCursor(val) {
             const el = document.getElementById('rawText');
             const start = el.selectionStart;
@@ -797,7 +1413,6 @@ ${actionBullets}
             autoSave();
         }
 
-        // 경과 및 현재 시각 타임스탬프 마킹
         function insertTimestamp() {
             const now = new Date();
             const h = String(now.getHours()).padStart(2, '0');
@@ -805,7 +1420,6 @@ ${actionBullets}
             insertAtCursor(`[⏱️ ${h}:${m}] `);
         }
 
-        // 스마트 토스트 알람
         function showToast(msg) {
             const t = document.getElementById('toast');
             t.innerText = msg;
@@ -815,53 +1429,53 @@ ${actionBullets}
             }, 3000);
         }
 
-        // 설정 환경 변수 로드 및 변경
         function toggleSettings() { document.getElementById('settingsModal').classList.toggle('hidden'); }
         function saveSettings() {
             const config = { apiKey: document.getElementById('apiKey').value.trim(), lang: document.getElementById('recLang').value };
             localStorage.setItem(CONFIG_KEY, JSON.stringify(config));
             toggleSettings();
-            showToast('설정 옵션이 정상 반영되었습니다.');
+            showToast('새로운 사용자 환경 조건이 업데이트되었습니다.');
         }
 
-        // 요약서 클립보드 초고속 전송
         function copyAll() {
             const el = document.getElementById('finalText');
-            if (!el.value) return showToast('복사할 회의록 내용이 비어 있습니다.');
+            if (!el.value) return showToast('복사할 텍스트 파일 데이터가 공백입니다.');
             el.select();
             document.execCommand('copy');
-            showToast('회의 요약서 전체가 클립보드에 전송되었습니다.');
+            showToast('마크다운 요약 회의록이 복사되었습니다.');
         }
 
-        // 로컬 기기 다운로드 아웃풋
         function downloadText() {
             const text = document.getElementById('finalText').value;
-            if (!text) return showToast('저장할 텍스트 파일 데이터가 없습니다.');
-            const blob = new Blob([text], {type: 'text/plain;charset=utf-8'});
+            if (!text) return showToast('저장할 텍스트가 부족합니다.');
+            const blob = new Blob([text], {type: 'text/markdown;charset=utf-8'});
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `${document.getElementById('meetingTitle').value || '회의록'}.txt`;
+            a.download = `${document.getElementById('meetingTitle').value || '회의록'}.md`;
             a.click();
             URL.revokeObjectURL(url);
-            showToast('기기 내 텍스트 파일 저장 완료.');
+            showToast('마크다운 기기 다운로드 완료.');
         }
 
-        // 음성 파일 탭 제어 및 데이터 임포트
         function switchInputMode(mode) {
             document.getElementById('panel-realtime').classList.toggle('hidden', mode !== 'realtime');
             document.getElementById('panel-upload').classList.toggle('hidden', mode !== 'upload');
-            document.getElementById('tab-realtime').className = mode === 'realtime' ? 'flex-1 py-1.5 text-[11px] font-bold rounded-lg transition-all bg-white dark:bg-darkCard text-indigo-600 shadow-sm' : 'flex-1 py-1.5 text-[11px] font-bold rounded-lg transition-all text-slate-500';
-            document.getElementById('tab-upload').className = mode === 'upload' ? 'flex-1 py-1.5 text-[11px] font-bold rounded-lg transition-all bg-white dark:bg-darkCard text-indigo-600 shadow-sm' : 'flex-1 py-1.5 text-[11px] font-bold rounded-lg transition-all text-slate-500';
+            
+            const activeTabClass = 'flex-1 py-1.5 text-xs font-bold rounded-lg transition-all bg-white dark:bg-darkCard text-indigo-600 dark:text-indigo-400 shadow-sm';
+            const inactiveTabClass = 'flex-1 py-1.5 text-xs font-bold rounded-lg transition-all text-slate-500 dark:text-slate-400';
+            
+            document.getElementById('tab-realtime').className = mode === 'realtime' ? activeTabClass : inactiveTabClass;
+            document.getElementById('tab-upload').className = mode === 'upload' ? activeTabClass : inactiveTabClass;
         }
 
-        function handleAudioUpload(e) {
-            const file = e.target.files[0];
+        function handleAudioUpload(event) {
+            const file = event.target.files[0];
             if (file) {
                 document.getElementById('fileName').innerText = file.name;
                 document.getElementById('audioElement').src = URL.createObjectURL(file);
                 document.getElementById('audioPlayer').classList.remove('hidden');
-                showToast('음성 녹음 파일 로드에 성공했습니다.');
+                showToast('음성 파일을 성공적으로 로드했습니다.');
             }
         }
 
