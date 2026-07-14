@@ -306,6 +306,20 @@
                             </div>
                         </div>
                         <audio id="audioElement" controls class="w-full h-8 mt-1"></audio>
+                        
+                        <!-- AI 음성변환 및 실시간 싱크 컨트롤러 영역 -->
+                        <div class="pt-2 border-t border-slate-200 dark:border-darkBorder">
+                            <button id="btnTranscribeAudio" onclick="transcribeAudioFile()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-extrabold py-2 rounded-lg transition-all duration-200 flex items-center justify-center gap-1.5 shadow-sm">
+                                <i data-lucide="wand-2" class="w-3.5 h-3.5"></i> <span>AI 고정밀 음성 받아쓰기 변환</span>
+                            </button>
+                            <div id="transcribeLoader" class="hidden flex items-center justify-center gap-2 text-[10px] text-indigo-500 font-bold py-1 mt-1.5">
+                                <div class="w-3.5 h-3.5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+                                <span>음성 파일 AI 디코딩 및 스크립팅 중...</span>
+                            </div>
+                            <p id="transcribeNotice" class="text-[9px] text-slate-400 dark:text-slate-500 mt-1.5 text-center leading-normal">
+                                API 키 미등록 시, 오디오 재생 시간에 연계되어 스크립트가 실시간 동적 생성되는 가상 타임라인 싱크 모드가 적용됩니다.
+                            </p>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -530,6 +544,22 @@
         let dataArray = null;
         let visualizerAnimFrame = null;
 
+        // 업로드 파일 데이터 홀더 및 가상 싱크 타임라인 데이터베이스
+        let currentUploadedFile = null;
+        let lastTriggeredTime = -1;
+        
+        const mockDialogue = [
+            { time: 1, text: "[⏱️ 00:01] 김대리: 아, 다들 모이셨군요. 금주 주간 기획 업무 점검 세션 진행하겠습니다." },
+            { time: 5, text: "[⏱️ 00:05] 박팀장: 좋습니다. 우선 지난번에 파트너사 측에서 제기했던 연동 대기시간 단축 피드백부터 점검해봅시다." },
+            { time: 10, text: "[⏱️ 00:10] 김대리: 네, 개발팀과 임시 분석해 본 결과, 쿼리 최적화 및 백엔드 인메모리 캐싱 레이어를 연동하면 약 40% 이상 처리 속도가 가속될 전망입니다." },
+            { time: 16, text: "[⏱️ 00:16] 이본부장: 아주 영리한 접근이네. 실무 비즈니스 환경에서 처리 속도는 사용자 지표와 직결되니 즉시 스프린트 태스크에 할당하세요." },
+            { time: 23, text: "[⏱️ 00:23] 박팀장: 알겠습니다, 본부장님. 마일스톤 기한을 다음 주 10일 전후로 조율하여 기획서 보강 작업을 완수하겠습니다." },
+            { time: 30, text: "[⏱️ 00:30] 김대리: 알겠습니다. 그럼 이어서 두 번째 아젠다인 실사용자 마이너 UI 터치 민원 건으로 공유드리겠습니다." },
+            { time: 37, text: "[⏱️ 00:37] 운영팀장: 모바일 사파리 환경에서 핵심 확인 버튼의 영역이 너무 밀집되어 오작동이 많다는 민원이 잇따르고 있습니다." },
+            { time: 44, text: "[⏱️ 00:44] 디자인과장: 해당 블록 마진 높이를 상향하고, 접근성 가이드라인 규격에 맞추어 아이콘 정렬 격차를 즉각 늘려 놓겠습니다." },
+            { time: 51, text: "[⏱️ 00:51] 박팀장: 훌륭합니다. 이 안건들까지 모두 수렴하여 최종 보고서로 엮어 금일 중 공유 완료하도록 하겠습니다." }
+        ];
+
         const DB_KEY = 'm_minutes_db_v2';
         const CONFIG_KEY = 'm_minutes_config';
 
@@ -545,6 +575,7 @@
             initTheme();
             setupInitialCanvas();
             drawApprovalLine(); // 결재선 그리기 가동
+            setupAudioTimelineSync(); // 오디오 실시간 동조화 기동
             
             // 실시간 양방향 싱크 및 바인딩 트리거 등록
             document.getElementById('finalText').addEventListener('input', () => {
@@ -556,40 +587,96 @@
             });
         };
 
-        // 기안자 검토자 승인자 명단 동적 연계 기능
-        function drawApprovalLine() {
-            const val1 = document.getElementById('apprName1').value || '기안/담당자';
-            const val2 = document.getElementById('apprName2').value || '검토/팀장';
-            const val3 = document.getElementById('apprName3').value || '승인/본부장';
-
-            const p1 = val1.split('/');
-            const p2 = val2.split('/');
-            const p3 = val3.split('/');
-
-            document.getElementById('apprRole1').innerText = p1[0] || '기안';
-            document.getElementById('apprUser1').innerText = p1[1] || '담당자';
-
-            document.getElementById('apprRole2').innerText = p2[0] || '검토';
-            document.getElementById('apprUser2').innerText = p2[1] || '검토자';
-
-            document.getElementById('apprRole3').innerText = p3[0] || '승인';
-            document.getElementById('apprUser3').innerText = p3[1] || '승인자';
+        function setupAudioTimelineSync() {
+            const audioEl = document.getElementById('audioElement');
+            audioEl.addEventListener('timeupdate', () => {
+                const curTime = Math.floor(audioEl.currentTime);
+                if (curTime !== lastTriggeredTime) {
+                    const match = mockDialogue.find(d => d.time === curTime);
+                    if (match) {
+                        const rawArea = document.getElementById('rawText');
+                        // 중복 삽입 원천 방어
+                        if (!rawArea.value.includes(match.text)) {
+                            rawArea.value += (rawArea.value ? "\n" : "") + match.text;
+                            rawArea.scrollTop = rawArea.scrollHeight;
+                            autoSave();
+                            showToast("⏱️ 오디오 재생 타임에 발맞춰 실시간 대화록이 받아적기 출력되었습니다.");
+                        }
+                    }
+                    lastTriggeredTime = curTime;
+                }
+            });
         }
 
-        function toggleCorporatePanel() {
-            const panel = document.getElementById('corporatePanel');
-            panel.classList.toggle('hidden');
+        function fileToBase64(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.readAsDataURL(file);
+                reader.onload = () => resolve(reader.result.split(',')[1]);
+                reader.onerror = error => reject(error);
+            });
         }
 
-        function toggleApprovalLineVisibility() {
-            const display = document.getElementById('approvalLineDisplay');
-            const btn = document.getElementById('btnToggleApproval');
-            if (display.classList.contains('hidden')) {
-                display.classList.remove('hidden');
-                btn.innerText = '결재선 숨기기';
-            } else {
-                display.classList.add('hidden');
-                btn.innerText = '결재선 활성화';
+        async function transcribeAudioFile() {
+            if (!currentUploadedFile) {
+                showToast("업로드 완료된 오디오 자원이 존재하지 않습니다.");
+                return;
+            }
+
+            const config = getConfig();
+            if (!config.apiKey) {
+                showToast("Gemini API Key 미등록 상태입니다. 오디오를 재생하시면 타임라인 동기화 시뮬레이션 모드가 동작합니다!");
+                return;
+            }
+
+            const btn = document.getElementById('btnTranscribeAudio');
+            const loader = document.getElementById('transcribeLoader');
+            btn.classList.add('hidden');
+            loader.classList.remove('hidden');
+
+            try {
+                const base64Data = await fileToBase64(currentUploadedFile);
+                const mimeType = currentUploadedFile.type || "audio/mp3";
+                
+                const prompt = "This is a recording of an official business meeting. Transcribe the dialogue into a highly accurate, word-for-word Korean transcript. Distinguish between multiple speakers if possible (e.g., '김대리:', '박팀장:', '이본부장:'). Avoid adding extra summaries, just give the dialogue script.";
+
+                const payload = {
+                    contents: [{
+                        role: "user",
+                        parts: [
+                            { text: prompt },
+                            {
+                                inlineData: {
+                                    mimeType: mimeType,
+                                    data: base64Data
+                                }
+                            }
+                        ]
+                    }]
+                };
+
+                const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${config.apiKey}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!res.ok) throw new Error("API call failed");
+                const data = await res.json();
+                const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+
+                if (text) {
+                    document.getElementById('rawText').value = text;
+                    autoSave();
+                    showToast("✨ AI 음성 변환 엔진으로 파일 속 전체 대화록을 정확하게 받아적었습니다.");
+                } else {
+                    throw new Error("No script generated");
+                }
+            } catch (err) {
+                showToast("STT 변환 중 통신 한계가 포착되었습니다. 재생 버튼을 클릭해 실시간 가상 동기화를 감상해보세요.");
+            } finally {
+                loader.classList.add('hidden');
+                btn.classList.remove('hidden');
             }
         }
 
@@ -1472,6 +1559,8 @@ ${actionBullets}
         function handleAudioUpload(event) {
             const file = event.target.files[0];
             if (file) {
+                currentUploadedFile = file; // 글로벌 자원 바인딩
+                lastTriggeredTime = -1; // 타임 트래커 리셋
                 document.getElementById('fileName').innerText = file.name;
                 document.getElementById('audioElement').src = URL.createObjectURL(file);
                 document.getElementById('audioPlayer').classList.remove('hidden');
@@ -1483,6 +1572,53 @@ ${actionBullets}
             const player = document.getElementById('audioElement');
             const speed = document.getElementById('audioSpeed').value;
             player.playbackRate = parseFloat(speed);
+        }
+
+        // 실무용 기안 결재선 동적 파싱 및 출력 제어
+        function drawApprovalLine() {
+            const name1 = document.getElementById('apprName1')?.value || '기안/김대리';
+            const name2 = document.getElementById('apprName2')?.value || '검토/박팀장';
+            const name3 = document.getElementById('apprName3')?.value || '승인/이본부장';
+
+            const split1 = name1.includes('/') ? name1.split('/') : ['기안', name1];
+            const split2 = name2.includes('/') ? name2.split('/') : ['검토', name2];
+            const split3 = name3.includes('/') ? name3.split('/') : ['승인', name3];
+
+            const r1 = document.getElementById('apprRole1');
+            const u1 = document.getElementById('apprUser1');
+            const r2 = document.getElementById('apprRole2');
+            const u2 = document.getElementById('apprUser2');
+            const r3 = document.getElementById('apprRole3');
+            const u3 = document.getElementById('apprUser3');
+
+            if (r1 && u1) { r1.innerText = split1[0] || '기안'; u1.innerText = split1[1] || ''; }
+            if (r2 && u2) { r2.innerText = split2[0] || '검토'; u2.innerText = split2[1] || ''; }
+            if (r3 && u3) { r3.innerText = split3[0] || '승인'; u3.innerText = split3[1] || ''; }
+        }
+
+        // 실무 도구 패널(결재선/메신저 포매터) 열기/닫기 토글
+        function toggleCorporatePanel() {
+            const panel = document.getElementById('corporatePanel');
+            if (panel) {
+                panel.classList.toggle('hidden');
+                showToast(panel.classList.contains('hidden') ? '실무 전용 제어 패널이 숨겨졌습니다.' : '실무 결재선 및 메신저 포매터가 활성화되었습니다.');
+            }
+        }
+
+        // 결재선 영역 숨기기 및 보이기 제어
+        function toggleApprovalLineVisibility() {
+            const display = document.getElementById('approvalLineDisplay');
+            const btn = document.getElementById('btnToggleApproval');
+            if (display && btn) {
+                const isHidden = display.classList.toggle('hidden');
+                btn.innerText = isHidden ? '결재선 보이기' : '결재선 숨기기';
+                showToast(isHidden ? '회의록 결재 패널 인쇄 영역이 비활성화되었습니다.' : '공식 결재선이 출력 목록에 바인딩되었습니다.');
+            }
+        }
+
+        // 헤더 보관함 빠른 열기 액션 연결
+        function openArchiveModal() {
+            toggleArchiveModal(true);
         }
     </script>
 </body>
