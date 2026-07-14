@@ -7,15 +7,23 @@
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght=300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
     
     <!-- 모바일 PWA 및 iOS 사파리 전체화면 최적화 설정 -->
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="스마트 회의록">
     
-    <link rel="apple-touch-icon" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100' fill='%234F46E5'><rect width='100' height='100' rx='20'/><path d='M30 35h40M30 50h40M30 65h25' stroke='white' stroke-width='8' stroke-linecap='round'/><circle cx='70' cy='65' r='6' fill='%2310B981'/></svg>">
+    <link class="no-print" rel="apple-touch-icon" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100' fill='%234F46E5'><rect width='100' height='100' rx='20'/><path d='M30 35h40M30 50h40M30 65h25' stroke='white' stroke-width='8' stroke-linecap='round'/><circle cx='70' cy='65' r='6' fill='%2310B981'/></svg>">
     
+    <!-- 무료 온디바이스 STT 실현을 위한 Transformers.js 및 Web Audio 디코더 라이브러리 추가 -->
+    <script type="module">
+        import { pipeline, env } from 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2';
+        // CDN 호스팅 설정 보정
+        env.allowLocalModels = false;
+        window.transformersPipeline = pipeline;
+    </script>
+
     <script>
         tailwind.config = {
             darkMode: 'class',
@@ -110,7 +118,7 @@
             </div>
             <div>
                 <h1 class="text-sm font-extrabold tracking-tight flex items-center gap-2">
-                    M-Minutes PRO <span class="text-[9px] bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 font-bold px-2 py-0.5 rounded-full border border-indigo-200 dark:border-indigo-800">v2.9 Enterprise</span>
+                    M-Minutes PRO <span class="text-[9px] bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 font-bold px-2 py-0.5 rounded-full border border-indigo-200 dark:border-indigo-800">v3.1 Enterprise</span>
                 </h1>
                 <div class="flex items-center gap-1.5 text-[10px] text-slate-500 dark:text-slate-400 font-medium">
                     <span class="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span>
@@ -175,7 +183,6 @@
         </div>
     </div>
 
-    <!-- 실무 전용 결재선 및 사내 메신저 포맷 기획 영역 -->
     <div id="corporatePanel" class="no-print max-w-7xl mx-auto px-4 pt-4 hidden">
         <div class="bg-white dark:bg-darkCard border border-slate-200 dark:border-darkBorder rounded-2xl p-4 shadow-sm grid grid-cols-1 md:grid-cols-2 gap-4">
             <div class="space-y-3">
@@ -290,7 +297,7 @@
                         <input type="file" id="audioFile" accept="audio/*" onchange="handleAudioUpload(event)" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer">
                         <i data-lucide="upload-cloud" class="w-9 h-9 text-indigo-500 mx-auto mb-2"></i>
                         <p class="text-xs font-bold text-slate-600 dark:text-slate-300">오디오 파일 선택 또는 드래그</p>
-                        <p class="text-[10px] text-slate-400 mt-1">MP3, WAV, M4A 형식 지원</p>
+                        <p class="text-[10px] text-slate-400 mt-1">MP3, WAV, M4A, OGG 등 형식 지원</p>
                     </div>
                     <div id="audioPlayer" class="hidden space-y-2 p-3 bg-slate-50 dark:bg-slate-900/50 rounded-xl border border-slate-100 dark:border-darkBorder">
                         <div class="flex justify-between items-center text-[10px] font-bold text-slate-400">
@@ -310,21 +317,25 @@
                         <!-- AI 음성변환 및 실시간 싱크 컨트롤러 영역 -->
                         <div class="pt-2 border-t border-slate-200 dark:border-darkBorder">
                             <button id="btnTranscribeAudio" onclick="transcribeAudioFile()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-extrabold py-2 rounded-lg transition-all duration-200 flex items-center justify-center gap-1.5 shadow-sm">
-                                <i data-lucide="wand-2" class="w-3.5 h-3.5"></i> <span>AI 고정밀 음성 받아쓰기 변환</span>
+                                <i data-lucide="wand-2" class="w-3.5 h-3.5"></i> <span id="transcribeBtnText">무료 온디바이스 / API 받아쓰기 변환</span>
                             </button>
-                            <div id="transcribeLoader" class="hidden flex items-center justify-center gap-2 text-[10px] text-indigo-500 font-bold py-1 mt-1.5">
-                                <div class="w-3.5 h-3.5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
-                                <span>음성 파일 AI 디코딩 및 스크립팅 중...</span>
+                            <div id="transcribeLoader" class="hidden flex flex-col items-center justify-center gap-2 text-[10px] text-indigo-500 font-bold py-1 mt-1.5">
+                                <div class="flex items-center gap-2">
+                                    <div class="w-3.5 h-3.5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+                                    <span id="transcribeProgressText">음성 데이터 AI 디코딩 분석 중...</span>
+                                </div>
+                                <div id="localModelLoadingBar" class="w-full bg-slate-200 dark:bg-slate-800 rounded-full h-1.5 mt-1 hidden">
+                                    <div id="localModelProgressBar" class="bg-indigo-600 h-1.5 rounded-full transition-all duration-300" style="width: 0%"></div>
+                                </div>
                             </div>
                             <p id="transcribeNotice" class="text-[9px] text-slate-400 dark:text-slate-500 mt-1.5 text-center leading-normal">
-                                API 키 미등록 시, 오디오 재생 시간에 연계되어 스크립트가 실시간 동적 생성되는 가상 타임라인 싱크 모드가 적용됩니다.
+                                API 키 미입력 상태일 시, 사용자 기기 GPU/CPU를 100% 무료로 사용하는 <span class="text-indigo-600 dark:text-indigo-400 font-semibold">브라우저 로컬 구동 온디바이스 Whisper AI 엔진</span>으로 가동됩니다. (최초 실행 시 가벼운 AI 모델 파일 로딩 시간이 발생합니다)
                             </p>
                         </div>
                     </div>
                 </div>
             </div>
 
-            <!-- AI 스마트 템플릿 제어 -->
             <div class="bg-gradient-to-br from-indigo-700 via-indigo-600 to-violet-700 dark:from-indigo-950 dark:via-indigo-900 dark:to-violet-950 rounded-2xl p-4 shadow-xl text-white space-y-4 relative overflow-hidden">
                 <div class="absolute -right-10 -bottom-10 opacity-10">
                     <i data-lucide="cpu" class="w-40 h-40"></i>
@@ -367,7 +378,7 @@
                     <span class="text-[10px] font-black text-indigo-600 uppercase tracking-wider">OFFICIAL MEETING MINUTES</span>
                     <h3 class="text-xs font-bold text-slate-700 dark:text-slate-300">본 회의록은 사내 표준 결재 규격을 충족합니다.</h3>
                 </div>
-                <div class="flex">
+                <div class="flex font-sans">
                     <table class="approval-table font-semibold text-slate-800 dark:text-slate-200">
                         <thead>
                             <tr class="bg-slate-50 dark:bg-slate-900">
@@ -400,7 +411,7 @@
                         <button onclick="insertTimestamp()" class="text-[9px] font-bold bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-2 py-1.5 rounded-lg border border-slate-200 dark:border-darkBorder transition">⏱️ 시간</button>
                     </div>
                 </div>
-                <textarea id="rawText" class="w-full flex-1 bg-slate-50/50 dark:bg-slate-900/40 rounded-xl p-3.5 outline-none resize-none leading-relaxed text-sm focus:ring-1 focus:ring-slate-300 dark:focus:ring-slate-700 transition" placeholder="인식된 대화 본문이 실시간 스크립트로 구성됩니다... 직접 수정하거나 텍스트를 기입할 수도 있습니다."></textarea>
+                <textarea id="rawText" oninput="markAsEdited()" class="w-full flex-1 bg-slate-50/50 dark:bg-slate-900/40 rounded-xl p-3.5 outline-none resize-none leading-relaxed text-sm focus:ring-1 focus:ring-slate-300 dark:focus:ring-slate-700 transition" placeholder="인식된 대화 본문이 실시간 스크립트로 구성됩니다... 직접 수정하거나 텍스트를 기입할 수도 있습니다."></textarea>
             </div>
 
             <!-- 최종 요약 회의록 + 액션 아이템 보드 -->
@@ -485,6 +496,20 @@
                 <h3 class="font-bold text-md text-slate-800 dark:text-white">사용자 환경 설정</h3>
             </div>
             <div class="space-y-4">
+                <!-- Gemini 무료 API Key 발급 가이드 추가 -->
+                <div class="bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-100 dark:border-indigo-900/60 rounded-xl p-3 space-y-1.5">
+                    <h4 class="text-xs font-bold text-indigo-700 dark:text-indigo-400 flex items-center gap-1.5">
+                        <i data-lucide="help-circle" class="w-4 h-4"></i> Gemini 무료 API 키 발급 가이드
+                    </h4>
+                    <ol class="text-[10.5px] text-slate-600 dark:text-slate-300 list-decimal pl-4 space-y-1">
+                        <li><a href="https://aistudio.google.com/" target="_blank" class="text-indigo-600 dark:text-indigo-400 font-bold underline hover:text-indigo-500 inline-flex items-center gap-0.5">Google AI Studio <i data-lucide="external-link" class="w-3 h-3"></i></a>에 구글 계정으로 로그인합니다.</li>
+                        <li>좌측 상단의 <strong class="text-indigo-600 dark:text-indigo-400">"Get API key"</strong> 버튼을 클릭합니다.</li>
+                        <li><strong class="text-indigo-600 dark:text-indigo-400">"Create API key"</strong>를 선택하여 새 프로젝트 또는 기존 프로젝트에 무료 API Key를 신속하게 생성합니다.</li>
+                        <li>발급된 키(<span class="font-mono bg-slate-200/50 dark:bg-slate-800/50 px-1 rounded text-[10px]">AIzaSy...</span>)를 복사하여 아래 입력창에 등록하세요.</li>
+                    </ol>
+                    <p class="text-[9px] text-slate-400 dark:text-slate-500 leading-snug">※ 무료 Tier인 Gemini 2.5 Flash 모델 기준 분당 15회 호출, 하루 1,500회 호출이 무료로 보장됩니다.</p>
+                </div>
+
                 <div>
                     <label class="block text-[10px] font-black text-slate-500 dark:text-slate-400 mb-1.5 uppercase tracking-wider">Gemini API Key 등록</label>
                     <input type="password" id="apiKey" class="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-darkBorder rounded-xl px-3.5 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500" placeholder="AI 요약을 위한 API Key를 기입하세요">
@@ -524,7 +549,7 @@
     </div>
 
     <!-- 토스트 알림 컴포넌트 -->
-    <div id="toast" class="no-print fixed bottom-6 left-1/2 -translate-x-1/2 bg-slate-900/95 dark:bg-slate-100/95 text-white dark:text-slate-900 text-xs px-4 py-3 rounded-2xl shadow-2xl opacity-0 transition-all duration-300 pointer-events-none z-50 flex items-center gap-2 font-semibold"></div>
+    <div id="toast" class="no-print fixed bottom-6 left-1/2 -translate-x-1/2 bg-slate-900/95 dark:bg-slate-100/95 text-white dark:text-slate-900 text-xs px-4 py-3 rounded-2xl shadow-2xl opacity-0 transition-all duration-300 pointer-events-none z-50 flex items-center gap-2 font-semibold font-sans"></div>
 
     <script>
         let recognition = null;
@@ -548,6 +573,9 @@
         let currentUploadedFile = null;
         let lastTriggeredTime = -1;
         
+        // 사용자가 오디오를 직접 디코딩했거나, 텍스트가 이미 가공된 상태를 표시하는 보호 플래그
+        let isTranscribedOrEdited = false;
+
         const mockDialogue = [
             { time: 1, text: "[⏱️ 00:01] 김대리: 아, 다들 모이셨군요. 금주 주간 기획 업무 점검 세션 진행하겠습니다." },
             { time: 5, text: "[⏱️ 00:05] 박팀장: 좋습니다. 우선 지난번에 파트너사 측에서 제기했던 연동 대기시간 단축 피드백부터 점검해봅시다." },
@@ -590,6 +618,9 @@
         function setupAudioTimelineSync() {
             const audioEl = document.getElementById('audioElement');
             audioEl.addEventListener('timeupdate', () => {
+                // 사용자가 AI 받아쓰기를 수행했거나 본문을 수동 작성한 경우에는 타임라인 예시(Mock)가 덮어씌워지지 않도록 방어
+                if (isTranscribedOrEdited) return;
+
                 const curTime = Math.floor(audioEl.currentTime);
                 if (curTime !== lastTriggeredTime) {
                     const match = mockDialogue.find(d => d.time === curTime);
@@ -608,6 +639,12 @@
             });
         }
 
+        // 사용자가 스크립트 텍스트 영역을 직접 타이핑하여 수정한 경우, 타임라인 mock 덮어쓰기 정지
+        function markAsEdited() {
+            isTranscribedOrEdited = true;
+            autoSave();
+        }
+
         function fileToBase64(file) {
             return new Promise((resolve, reject) => {
                 const reader = new FileReader();
@@ -617,70 +654,175 @@
             });
         }
 
+        // 제미나이 정밀 오디오 분석 MIME 매퍼
+        function getMimeType(file) {
+            if (file.type) return file.type;
+            const ext = file.name.split('.').pop().toLowerCase();
+            const map = {
+                'mp3': 'audio/mp3',
+                'wav': 'audio/wav',
+                'm4a': 'audio/mp4',
+                'mp4': 'audio/mp4',
+                'webm': 'audio/webm',
+                'ogg': 'audio/ogg',
+                'aac': 'audio/aac',
+                'flac': 'audio/flac'
+            };
+            return map[ext] || 'audio/mp3';
+        }
+
+        // 로컬 오디오 데이터 디코딩 함수 (On-Device Whisper 가용 규격 변환)
+        async function getAudioBufferForLocalAI(file) {
+            const arrayBuffer = await file.arrayBuffer();
+            const audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+            const decodedData = await audioCtx.decodeAudioData(arrayBuffer);
+            return decodedData.getChannelData(0); // 단일 채널 플롯 Float32Array 추출
+        }
+
         async function transcribeAudioFile() {
             if (!currentUploadedFile) {
                 showToast("업로드 완료된 오디오 자원이 존재하지 않습니다.");
                 return;
             }
 
-            const config = getConfig();
-            if (!config.apiKey) {
-                showToast("Gemini API Key 미등록 상태입니다. 오디오를 재생하시면 타임라인 동기화 시뮬레이션 모드가 동작합니다!");
-                return;
-            }
+            // 진짜 STT가 수행되므로 타임라인 동기화 예시 텍스트 리스너를 비활성화 처리
+            isTranscribedOrEdited = true;
 
+            const config = getConfig();
             const btn = document.getElementById('btnTranscribeAudio');
             const loader = document.getElementById('transcribeLoader');
+            const progressText = document.getElementById('transcribeProgressText');
+            const loadingBar = document.getElementById('localModelLoadingBar');
+            const progressBar = document.getElementById('localModelProgressBar');
+
             btn.classList.add('hidden');
             loader.classList.remove('hidden');
 
-            try {
-                const base64Data = await fileToBase64(currentUploadedFile);
-                const mimeType = currentUploadedFile.type || "audio/mp3";
-                
-                const prompt = "This is a recording of an official business meeting. Transcribe the dialogue into a highly accurate, word-for-word Korean transcript. Distinguish between multiple speakers if possible (e.g., '김대리:', '박팀장:', '이본부장:'). Avoid adding extra summaries, just give the dialogue script.";
+            // CASE A: API Key가 있는 경우 -> 고정밀 클라우드 Gemini Flash STT 실행
+            if (config.apiKey) {
+                progressText.innerText = "Gemini API를 사용하여 고정밀 받아쓰기 구동 중...";
+                loadingBar.classList.add('hidden');
+                try {
+                    const base64Data = await fileToBase64(currentUploadedFile);
+                    const mimeType = getMimeType(currentUploadedFile);
+                    
+                    const prompt = "This is a recording of an official business meeting. Transcribe the dialogue into a highly accurate, word-for-word Korean transcript. Distinguish between multiple speakers if possible (e.g., '김대리:', '박팀장:', '이본부장:'). Avoid adding extra summaries, just give the dialogue script.";
 
-                const payload = {
-                    contents: [{
-                        role: "user",
-                        parts: [
-                            { text: prompt },
-                            {
-                                inlineData: {
-                                    mimeType: mimeType,
-                                    data: base64Data
+                    const payload = {
+                        contents: [{
+                            role: "user",
+                            parts: [
+                                { text: prompt },
+                                {
+                                    inlineData: {
+                                        mimeType: mimeType,
+                                        data: base64Data
+                                    }
+                                }
+                            ]
+                        }]
+                    };
+
+                    // [수정사항] 구글 API 권장 'x-goog-api-key' Auth Key(인증 헤더) 방식으로 완전히 변경
+                    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent`, {
+                        method: 'POST',
+                        headers: { 
+                            'Content-Type': 'application/json',
+                            'x-goog-api-key': config.apiKey
+                        },
+                        body: JSON.stringify(payload)
+                    });
+
+                    if (!res.ok) {
+                        const errorJson = await res.json().catch(() => ({}));
+                        const errMsg = errorJson.error?.message || `HTTP ${res.status}`;
+                        throw new Error(errMsg);
+                    }
+                    const data = await res.json();
+                    const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+
+                    if (text) {
+                        document.getElementById('rawText').value = text;
+                        autoSave();
+                        showToast("✨ AI 음성 변환 엔진으로 파일 속 전체 대화록을 정확하게 받아적었습니다.");
+                    } else {
+                        throw new Error("API 결과 반환에 텍스트 데이터가 누락되었습니다.");
+                    }
+                } catch (err) {
+                    console.error(err);
+                    showToast(`STT 변환 에러: ${err.message || err}. 온디바이스 모드를 시작하거나 직접 수정 모드를 이용해 보세요.`);
+                } finally {
+                    loader.classList.add('hidden');
+                    btn.classList.remove('hidden');
+                }
+            } 
+            // CASE B: API Key가 없는 경우 -> 완전 무료! 온디바이스 AI 오프라인 Whisper 가동
+            else {
+                if (!window.transformersPipeline) {
+                    showToast("로컬 인공지능 라이브러리 로딩을 대기하는 중입니다. 잠시 후 다시 클릭해 주세요.");
+                    loader.classList.add('hidden');
+                    btn.classList.remove('hidden');
+                    return;
+                }
+
+                progressText.innerText = "무료 온디바이스 AI 엔진 초기화 중 (최초 실행 시 로드 시간 소요)...";
+                loadingBar.classList.remove('hidden');
+                progressBar.style.width = '10%';
+
+                try {
+                    // 가볍고 빠른 한국어 지원 모델 Whisper Tiny 로드
+                    progressBar.style.width = '30%';
+                    const transcriber = await window.transformersPipeline(
+                        'automatic-speech-recognition', 
+                        'Xenova/whisper-tiny',
+                        {
+                            progress_callback: (info) => {
+                                if (info.status === 'progress') {
+                                    const percent = Math.round(info.progress);
+                                    progressBar.style.width = `${30 + (percent * 0.5)}%`;
+                                    progressText.innerText = `AI 모델 다운로드 중... (${percent}%)`;
                                 }
                             }
-                        ]
-                    }]
-                };
+                        }
+                    );
 
-                const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${config.apiKey}`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
-                });
+                    progressBar.style.width = '80%';
+                    progressText.innerText = "음성 파일 로컬 디코딩 및 주파수 필터링 수행 중...";
+                    
+                    const audioRawData = await getAudioBufferForLocalAI(currentUploadedFile);
 
-                if (!res.ok) throw new Error("API call failed");
-                const data = await res.json();
-                const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+                    progressBar.style.width = '90%';
+                    progressText.innerText = "온디바이스 인공지능 음성 추론(STT) 구동 중...";
 
-                if (text) {
-                    document.getElementById('rawText').value = text;
-                    autoSave();
-                    showToast("✨ AI 음성 변환 엔진으로 파일 속 전체 대화록을 정확하게 받아적었습니다.");
-                } else {
-                    throw new Error("No script generated");
+                    // 언어 한국어(ko) 고정하여 정확도 최적화 수행
+                    const result = await transcriber(audioRawData, {
+                        chunk_length_s: 30,
+                        stride_length_s: 5,
+                        language: 'korean',
+                        task: 'transcribe',
+                        return_timestamps: false
+                    });
+
+                    progressBar.style.width = '100%';
+                    if (result && result.text) {
+                        const cleanText = result.text.trim();
+                        // 원본 대화 텍스트 창에 채워 넣기
+                        document.getElementById('rawText').value = cleanText;
+                        autoSave();
+                        showToast("✨ 브라우저 탑재 온디바이스 AI Whisper를 통한 완전 무료 비접속 받아쓰기가 성공적으로 수행되었습니다!");
+                    } else {
+                        throw new Error("STT 텍스트 추론 결과가 존재하지 않습니다.");
+                    }
+                } catch (err) {
+                    console.error(err);
+                    showToast(`무료 온디바이스 분석 오류: ${err.message || err}. 직접 텍스트 기입을 통해 회의록 작성을 이어 나가실 수 있습니다.`);
+                } finally {
+                    loader.classList.add('hidden');
+                    btn.classList.remove('hidden');
                 }
-            } catch (err) {
-                showToast("STT 변환 중 통신 한계가 포착되었습니다. 재생 버튼을 클릭해 실시간 가상 동기화를 감상해보세요.");
-            } finally {
-                loader.classList.add('hidden');
-                btn.classList.remove('hidden');
             }
         }
 
-        // 사내 메신저 슬랙 / 팀즈 전송 규격 정제 추출기
         function copyMessengerFormat(type) {
             const title = document.getElementById('meetingTitle').value || '주간 실무 회의';
             const date = document.getElementById('meetingDate').value || '일시 미지정';
@@ -716,7 +858,6 @@
             showToast(`${type.toUpperCase()} 복사 완료! 메신저 창에 붙여넣기(Ctrl+V) 하세요.`);
         }
 
-        // 앱 초기 환경 빌드
         function initApp() {
             const db = getDB();
             if (db.length > 0) {
@@ -726,9 +867,13 @@
             }
             updateArchiveBadge();
             startDurationTimer();
+            
+            // UI에 기존 세팅값 매핑
+            const config = getConfig();
+            document.getElementById('apiKey').value = config.apiKey || '';
+            document.getElementById('recLang').value = config.lang || 'ko-KR';
         }
 
-        // 테마 관리
         function initTheme() {
             const saved = localStorage.getItem('theme') || 'light';
             document.documentElement.className = saved;
@@ -765,7 +910,6 @@
             showToast(`글자 크기가 ${fontLabels[fontSizeIdx]} 타입으로 변경되었습니다.`);
         }
 
-        // 시간 측정 관리자
         function startDurationTimer() {
             if (durationInterval) clearInterval(durationInterval);
             durationInterval = setInterval(() => {
@@ -867,12 +1011,6 @@
             document.getElementById('finalText').setSelectionRange(0, 0);
         }
 
-        // 보관함 검색 필터링 핸들러 (본문 내 검색 관통 포함)
-        function filterArchive() {
-            const query = document.getElementById('archiveSearch').value.toLowerCase();
-            renderArchive(query);
-        }
-
         function formatMd(type) {
             const el = document.getElementById('finalText');
             const start = el.selectionStart;
@@ -900,12 +1038,10 @@
             renderTodos();
         }
 
-        // 로컬 데이터 관리
         function getDB() { return JSON.parse(localStorage.getItem(DB_KEY) || '[]'); }
         function saveDB(db) { localStorage.setItem(DB_KEY, JSON.stringify(db)); }
         function getConfig() { return JSON.parse(localStorage.getItem(CONFIG_KEY) || '{"apiKey":"","lang":"ko-KR"}'); }
 
-        // 신규 회의 신속 개설
         function createNewMeeting() {
             const newId = 'm_' + Date.now();
             const now = new Date();
@@ -927,13 +1063,13 @@
             loadSession(newId);
             updateArchiveBadge();
             durationSeconds = 0;
+            isTranscribedOrEdited = false; // 새로운 회의 생성 시 타임라인 가상 스크립트 모드 재가동 가능
             // 오디오 버퍼 리셋
             document.getElementById('downloadVoiceBtn').classList.add('hidden');
             backupAudioUrl = null;
             showToast('새 회의록 템플릿이 개설되었습니다.');
         }
 
-        // 회의 세션 백업 복원
         function loadSession(id) {
             const db = getDB();
             const m = db.find(x => x.id === id);
@@ -946,6 +1082,13 @@
                 document.getElementById('finalText').value = m.final || '';
                 renderTodos();
                 
+                // 만약 불러온 본문 텍스트에 이미 가치 있는 글들이 적혀 있다면 mock 타임라인 방어
+                if (m.raw && m.raw.trim().length > 0) {
+                    isTranscribedOrEdited = true;
+                } else {
+                    isTranscribedOrEdited = false;
+                }
+
                 // 검색 바가 열려있을 시 싱크 업데이트
                 if (!document.getElementById('localSearchContainer').classList.contains('hidden')) {
                     searchInCurrentEditor();
@@ -953,7 +1096,6 @@
             }
         }
 
-        // 세션 자동동기화
         function autoSave() {
             if (!activeId) return;
             const db = getDB();
@@ -1043,6 +1185,12 @@
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
                 audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                
+                // 아이패드 iOS 오디오 상태 강제 회복 조치
+                if (audioCtx.state === 'suspended') {
+                    await audioCtx.resume();
+                }
+                
                 analyser = audioCtx.createAnalyser();
                 const source = audioCtx.createMediaStreamSource(stream);
                 source.connect(analyser);
@@ -1052,21 +1200,38 @@
                 
                 // 오디오 레코더 동시 초기화
                 audioChunks = [];
-                mediaRecorder = new MediaRecorder(stream);
+                
+                // 아이패드/iOS 환경 최적화 미디어타입 탐색
+                let options = {};
+                let ext = 'webm';
+                if (MediaRecorder.isTypeSupported('audio/mp4')) {
+                    options = { mimeType: 'audio/mp4' };
+                    ext = 'mp4';
+                } else if (MediaRecorder.isTypeSupported('audio/aac')) {
+                    options = { mimeType: 'audio/aac' };
+                    ext = 'aac';
+                } else if (MediaRecorder.isTypeSupported('audio/webm')) {
+                    options = { mimeType: 'audio/webm' };
+                    ext = 'webm';
+                }
+                
+                mediaRecorder = new MediaRecorder(stream, options);
                 mediaRecorder.ondataavailable = (event) => {
                     if (event.data.size > 0) {
                         audioChunks.push(event.data);
                     }
                 };
                 mediaRecorder.onstop = () => {
-                    const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                    const audioBlob = new Blob(audioChunks, { type: options.mimeType || 'audio/webm' });
                     backupAudioUrl = URL.createObjectURL(audioBlob);
                     document.getElementById('downloadVoiceBtn').classList.remove('hidden');
-                    showToast('성공적으로 증빙용 고품질 음성 백업 파일이 인코딩되었습니다.');
+                    
+                    window.backupExt = ext;
+                    showToast('성공적으로 아이패드 고품질 음성 백업 파일이 인코딩되었습니다.');
                 };
                 mediaRecorder.start();
             } catch (err) {
-                console.warn("마이크 스트림 연동 제한으로 가상 파형 및 시뮬레이션 인식이 가동됩니다.");
+                console.warn("마이크 스트림 연동 제한으로 가상 파형 및 시뮬레이션 인식이 가동됩니다.", err);
                 analyser = null;
                 mediaRecorder = null;
             }
@@ -1082,6 +1247,7 @@
 
                 recognition.onstart = () => {
                     isRecording = true;
+                    isTranscribedOrEdited = true; // 실시간 음성인식 가동 시 예시 싱크 비활성화
                     document.getElementById('btnStartSTT').classList.add('hidden');
                     document.getElementById('btnStopSTT').classList.remove('hidden');
                     document.getElementById('recStatus').innerText = '음성 분석 및 기입 진행 중';
@@ -1122,9 +1288,13 @@
         function startSpeechRecognition() {
             if (!recognition) setupSpeechRecognition();
             if (recognition) {
+                if (audioCtx && audioCtx.state === 'suspended') {
+                    audioCtx.resume();
+                }
                 recognition.start();
             } else {
                 isRecording = true;
+                isTranscribedOrEdited = true;
                 document.getElementById('btnStartSTT').classList.add('hidden');
                 document.getElementById('btnStopSTT').classList.remove('hidden');
                 document.getElementById('recStatus').innerText = '가상 레코딩 진행 중';
@@ -1134,7 +1304,11 @@
 
         function stopSpeechRecognition() {
             isRecording = false;
-            if (recognition) recognition.stop();
+            if (recognition) {
+                try {
+                    recognition.stop();
+                } catch(e) {}
+            }
             if (mediaRecorder && mediaRecorder.state !== 'inactive') {
                 mediaRecorder.stop();
             }
@@ -1148,9 +1322,10 @@
 
         function downloadVoiceBackup() {
             if (!backupAudioUrl) return showToast("사용 가능한 백업 녹음 파일이 존재하지 않습니다.");
+            const ext = window.backupExt || 'webm';
             const a = document.createElement('a');
             a.href = backupAudioUrl;
-            a.download = `voice_backup_${Date.now()}.webm`;
+            a.download = `voice_backup_${Date.now()}.${ext}`;
             a.click();
             showToast("회의 음성 백업 파일 다운로드가 시작되었습니다.");
         }
@@ -1162,73 +1337,95 @@
             setupInitialCanvas();
         }
 
-        // 담당자, 마감 기한, 우선순위 배지 연동 추출기
         function renderTodos() {
             const text = document.getElementById('finalText').value;
             const container = document.getElementById('todoBoard');
-            
-            // 향상된 정규식: - [ ] [담당자] 업무내용 (~마감일) [우선순위]
-            const regex = /^\s*-\s*\[\s*([ xX]?)\s*\]\s*(?:\[([^\]]+)\])?\s*([^~\[\n\r]+)(?:\(~([^)]+)\))?\s*(?:\[([^\]]+)\])?$/gm;
+            const regex = /^\s*-\s*\[\s*([ xX]?)\s*\]\s*(.+)$/gm;
             let match;
             let count = 0, done = 0, html = '';
             let matchesList = [];
 
             while ((match = regex.exec(text)) !== null) {
                 const isChecked = match[1].toLowerCase() === 'x';
-                const assignee = match[2] ? match[2].trim() : '';
-                const todoText = match[3] ? match[3].trim() : '';
-                const deadline = match[4] ? match[4].trim() : '';
-                const priority = match[5] ? match[5].trim() : '';
+                const todoRaw = match[2].trim();
                 const fullLine = match[0];
-                const lineIndex = match.index;
-                
-                matchesList.push({ 
-                    checked: isChecked, 
-                    assignee, 
-                    text: todoText, 
-                    deadline, 
-                    priority, 
-                    fullLine, 
-                    index: lineIndex 
+
+                let assignee = '';
+                let deadline = '';
+                let priority = '';
+                let todoClean = todoRaw;
+
+                const assigneeMatch = todoClean.match(/^\[([^\]]+)\]/);
+                if (assigneeMatch) {
+                    assignee = assigneeMatch[1];
+                    todoClean = todoClean.replace(/^\[[^\]]+\]\s*/, '');
+                }
+
+                const deadlineMatch = todoClean.match(/\(~([^\)]+)\)/);
+                if (deadlineMatch) {
+                    deadline = deadlineMatch[1];
+                    todoClean = todoClean.replace(/\s*\(~[^\)]+\)/, '');
+                }
+
+                const priorityMatch = todoClean.match(/\[([^\]]+)\]\s*$/);
+                if (priorityMatch) {
+                    priority = priorityMatch[1];
+                    todoClean = todoClean.replace(/\s*\[[^\]]+\]\s*$/, '');
+                }
+
+                matchesList.push({
+                    checked: isChecked,
+                    text: todoClean.trim(),
+                    assignee,
+                    deadline,
+                    priority,
+                    fullLine,
+                    index: match.index
                 });
+
                 count++;
                 if (isChecked) done++;
             }
 
             if (count > 0) {
                 matchesList.forEach((todo, idx) => {
-                    // 우선순위별 스타일링 배지 가공
-                    let priorityClass = "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300";
-                    if (todo.priority === '높음' || todo.priority === '긴급') {
-                        priorityClass = "bg-rose-100 text-rose-700 dark:bg-rose-950/40 dark:text-rose-400";
-                    } else if (todo.priority === '보통' || todo.priority === '중간') {
-                        priorityClass = "bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400";
-                    } else if (todo.priority === '낮음') {
-                        priorityClass = "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400";
+                    let badgeColor = 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300';
+                    if (todo.priority.includes('높음') || todo.priority.includes('긴급')) {
+                        badgeColor = 'bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300';
+                    } else if (todo.priority.includes('보통') || todo.priority.includes('중')) {
+                        badgeColor = 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300';
                     }
 
                     html += `
-                        <div class="flex flex-col p-3 bg-white dark:bg-slate-800 rounded-xl border border-slate-150 dark:border-darkBorder hover:border-indigo-400 dark:hover:border-indigo-500/50 transition gap-2">
-                            <div class="flex items-center gap-2">
+                        <div class="flex items-center justify-between bg-white dark:bg-slate-800 p-3 rounded-xl border border-slate-100 dark:border-slate-700 hover:border-indigo-400 transition shadow-sm">
+                            <div class="flex items-center gap-2.5 min-w-0 flex-1">
                                 <input type="checkbox" ${todo.checked ? 'checked' : ''} 
                                     onchange="toggleTodoOnEditor(${idx}, this.checked)" 
                                     class="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer">
-                                <span class="text-xs ${todo.checked ? 'line-through text-slate-400 dark:text-slate-500' : 'text-slate-700 dark:text-slate-200'} font-bold truncate flex-1">${todo.text}</span>
-                                <button onclick="deleteTodoOnEditor(${idx})" class="p-1 hover:text-rose-500 text-slate-300 dark:text-slate-600 transition"><i data-lucide="trash" class="w-3.5 h-3.5"></i></button>
+                                <div class="min-w-0 flex-1">
+                                    <span class="text-xs font-semibold ${todo.checked ? 'line-through text-slate-400 dark:text-slate-500' : 'text-slate-700 dark:text-slate-200'} block truncate">
+                                        ${todo.text}
+                                    </span>
+                                    <div class="flex flex-wrap items-center gap-1.5 mt-1 text-[9px] font-bold text-slate-400">
+                                        ${todo.assignee ? `<span class="bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 px-1.5 py-0.5 rounded"><i data-lucide="user" class="inline w-2.5 h-2.5 mr-0.5"></i>${todo.assignee}</span>` : ''}
+                                        ${todo.deadline ? `<span class="bg-emerald-50 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400 px-1.5 py-0.5 rounded"><i data-lucide="calendar" class="inline w-2.5 h-2.5 mr-0.5"></i>${todo.deadline}</span>` : ''}
+                                        ${todo.priority ? `<span class="${badgeColor} px-1.5 py-0.5 rounded">${todo.priority}</span>` : ''}
+                                    </div>
+                                </div>
                             </div>
-                            <div class="flex flex-wrap items-center gap-1.5 text-[9px] font-semibold mt-1">
-                                ${todo.assignee ? `<span class="bg-indigo-50 text-indigo-700 dark:bg-indigo-950/50 dark:text-indigo-400 px-2 py-0.5 rounded-md border border-indigo-100 dark:border-indigo-900/40"><i data-lucide="user" class="w-2.5 h-2.5 inline mr-1"></i>${todo.assignee}</span>` : ''}
-                                ${todo.deadline ? `<span class="bg-blue-50 text-blue-700 dark:bg-blue-950/50 dark:text-blue-400 px-2 py-0.5 rounded-md border border-blue-100 dark:border-blue-900/40"><i data-lucide="calendar" class="w-2.5 h-2.5 inline mr-1"></i>기한: ${todo.deadline}</span>` : ''}
-                                ${todo.priority ? `<span class="${priorityClass} px-2 py-0.5 rounded-md"><i data-lucide="flag" class="w-2.5 h-2.5 inline mr-1"></i>${todo.priority}</span>` : ''}
-                            </div>
+                            <button onclick="deleteTodoOnEditor(${idx})" class="text-slate-300 hover:text-rose-500 transition ml-2"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
                         </div>
                     `;
                 });
                 container.innerHTML = html;
                 document.getElementById('taskCounter').innerText = `${done}/${count} 완료`;
             } else {
-                container.innerHTML = '<p class="text-[10px] text-slate-400 dark:text-slate-500 italic text-center col-span-2 py-4">요약록에 - [ ] [담당자] 할일 (~기한) [우선순위] 형태의 마크다운을 추가해 보세요. 실무 우선순위 트래커와 실시간 바인딩됩니다.</p>';
-                document.getElementById('taskCounter').innerText = '0개 목록';
+                container.innerHTML = `
+                    <div class="text-center py-4 w-full text-[10px] text-slate-400 italic">
+                        감지된 할 일이 없습니다. 요약본에 - [ ] 형태의 할 일을 추가해 보세요.
+                    </div>
+                `;
+                document.getElementById('taskCounter').innerText = '0/0 완료';
             }
 
             window.cachedTodos = matchesList;
@@ -1266,68 +1463,60 @@
             editor.value = editor.value.replace(target.fullLine + '\n', '').replace(target.fullLine, '');
             autoSave();
             renderTodos();
-            showToast("할 일이 삭제되었습니다.");
+            showToast("할 일이 에디터와 실시간 싱크 해제되었습니다.");
         }
-
-        const templatePrompts = {
-            standard: `회의 녹취록을 바탕으로 전문적인 주간 실무 회의록을 작성해주세요.
-- 주요 어젠다별로 명확하게 서브 파트를 나눠 정리해주세요.
-- 결정된 기획안과 논의 사항을 체계적으로 서술하세요.
-- 향후 과제 및 담당 부서는 '- [ ] [담당자] 업무계획 (~완료희망일) [우선순위]' 형태의 마크다운 형식으로 3가지 이상 상세히 정리해주세요.`,
-
-            sprint: `개발 팀의 스프린트 계획 및 데일리 회고를 위한 미팅노트를 작성해주세요.
-- **스프린트 목표** 및 현재 완료 상태를 세션별로 분류하세요.
-- 각 업무 영역의 지연 사항이나 이슈 트래킹 요소(Blokers)를 구체적으로 수록하세요.
-- 태스크 배정은 반드시 '- [ ] [작업자명] 작업 상세내용 (~마감기한) [긴급]' 형태의 투두리스트 마크다운으로 추출하세요.`,
-
-            brainstorming: `브레인스토밍 세션에서 도출된 창의적인 생각과 아이디어를 구조화하여 정리해주세요.
-- 제안된 아이디어의 '가설', '기대 효과', '검증 전략'을 분할해 분석하세요.
-- 실행 타당성이 유력해 보이는 아이디어들은 우선순위별로 나열하세요.
-- 다음 단계 검증 업무는 '- [ ] [검증자] 상세업무 (~일정) [보통]' 형태의 액션 아이템 마크다운으로 포함시켜 주세요.`,
-
-            sales: `영업 상담 미팅 및 대외 파트너십 제안용 회의록을 가공해주세요.
-- 파트너사의 핵심 요구조건 및 고충(Pain Points)을 상세히 기록하세요.
-- 당사의 제안 내용과 그에 따른 고객 피드백 반응을 나누어 기술하세요.
-- 계약 실행 또는 피드백 후속 미팅 계획은 '- [ ] [담당부서] 업무내용 (~마감시한) [높음]' 마크다운 할 일로 배치하세요.`
-        };
 
         async function runAI() {
             const raw = document.getElementById('rawText').value.trim();
+            const templateType = document.getElementById('summaryTemplate').value;
             const config = getConfig();
-            const selectedTemplateType = document.getElementById('summaryTemplate').value;
-            
-            if (!raw) return showToast('요약할 대화 스크립트가 존재하지 않습니다.');
+            if (!raw) return showToast('원본 내용이 없습니다.');
             
             document.getElementById('aiLoader').classList.remove('hidden');
             
             if (config.apiKey) {
                 try {
-                    const promptTemplateText = templatePrompts[selectedTemplateType] || templatePrompts.standard;
-                    const prompt = `${promptTemplateText}\n\n[녹취 스크립트 원본]:\n${raw}`;
-                    
-                    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${config.apiKey}`, {
+                    let prompt = `회의 녹취록을 바탕으로 실무용 회의록을 정교하게 작성해줘. 마크다운 형식을 적극 활용하고, 결정된 사항 및 향후 일정, 담당자별 실행 목표를 반드시 포함해줘. 할 일 항목은 반드시 '- [ ] [담당자] 업무 내용 (~기한) [우선순위]' 형식으로 적어줘.\n`;
+                    if (templateType === 'sprint') {
+                        prompt += `스프린트 회고 형식에 가깝게 유지하며 스프린트 차단 요인(Blocker)과 다음 스텝들을 구조화해줘.\n`;
+                    } else if (templateType === 'brainstorming') {
+                        prompt += `아이디어 발산 세션 형식을 적용해 투표율 및 제안 위주로 작성하고 참신한 후보군을 잘 갈무리해줘.\n`;
+                    } else if (templateType === 'sales') {
+                        prompt += `비즈니스 협의체에 알맞게 정밀한 가격, 연동 규격, 요구 제안과 클라이언트 타임라인을 핵심적으로 분리해줘.\n`;
+                    }
+
+                    prompt += `\n녹취록:\n${raw}`;
+
+                    // [수정사항] 요약 파트 역시 권장 'x-goog-api-key' Auth Key(인증 헤더) 방식으로 변경
+                    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent`, {
                         method: 'POST',
-                        headers: {'Content-Type': 'application/json'},
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'x-goog-api-key': config.apiKey
+                        },
                         body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
                     });
                     
-                    if (!res.ok) throw new Error();
+                    if (!res.ok) {
+                        const errData = await res.json().catch(() => ({}));
+                        throw new Error(errData.error?.message || `HTTP ${res.status}`);
+                    }
                     const data = await res.json();
                     const result = data.candidates[0].content.parts[0].text;
                     
                     document.getElementById('finalText').value = result;
                     renderTodos();
                     autoSave();
-                    showToast('AI 요약 회의록이 고품질 프리셋으로 생성되었습니다.');
+                    showToast('AI 요약본이 완성되었습니다.');
                 } catch (e) {
-                    showToast('Gemini API 통신 에러가 포착되었습니다. 빌트인 로컬 빌더로 즉시 실행합니다.');
-                    simulateLocalSummary(raw, selectedTemplateType);
+                    showToast(`AI 요약 중 에러 발생: ${e.message || e}. 로컬 가공 모드로 임시 대체합니다.`);
+                    simulateLocalSummary(raw, templateType);
                 } finally {
                     document.getElementById('aiLoader').classList.add('hidden');
                 }
             } else {
                 setTimeout(() => {
-                    simulateLocalSummary(raw, selectedTemplateType);
+                    simulateLocalSummary(raw, templateType);
                     document.getElementById('aiLoader').classList.add('hidden');
                 }, 1500);
             }
@@ -1357,7 +1546,7 @@
             }
 
             let typeTitle = "일반 업무 정기 보고";
-            if (templateType === 'sprint') typeTitle = "개발 스프린트 데일리 레코딩";
+            if (templateType === 'sprint') typeTitle = "개발 스프린트 데일리 회고";
             if (templateType === 'brainstorming') typeTitle = "창의 혁신 아이디어 브레인세션";
             if (templateType === 'sales') typeTitle = "B2B 영업 파트너십 비즈 미팅";
 
@@ -1417,13 +1606,13 @@ ${actionBullets}
                         const start = Math.max(0, rawIndex - 15);
                         const end = Math.min(m.raw.length, rawIndex + query.length + 20);
                         const cleanSnippet = m.raw.substring(start, end).replace(/\n/g, ' ');
-                        const highlightSnippet = cleanSnippet.replace(new RegExp(query, 'gi'), match => `<mark class="bg-amber-200 dark:bg-amber-800 text-slate-900 dark:text-white rounded px-1 font-bold">${match}</match>`);
+                        const highlightSnippet = cleanSnippet.replace(new RegExp(query, 'gi'), match => `<mark class="bg-amber-200 dark:bg-amber-800 text-slate-900 dark:text-white rounded px-1 font-bold">${match}</mark>`);
                         snippetHtml = `<div class="text-[10px] text-slate-500 dark:text-slate-400 bg-slate-100/80 dark:bg-slate-950/50 p-2 rounded-xl mt-1.5 border border-slate-200/40 dark:border-slate-800/60 font-mono">.. ${highlightSnippet} ..</div>`;
                     } else if (finalIndex !== -1) {
                         const start = Math.max(0, finalIndex - 15);
                         const end = Math.min(m.final.length, finalIndex + query.length + 20);
                         const cleanSnippet = m.final.substring(start, end).replace(/\n/g, ' ');
-                        const highlightSnippet = cleanSnippet.replace(new RegExp(query, 'gi'), match => `<mark class="bg-amber-200 dark:bg-amber-800 text-slate-900 dark:text-white rounded px-1 font-bold">${match}</match>`);
+                        const highlightSnippet = cleanSnippet.replace(new RegExp(query, 'gi'), match => `<mark class="bg-amber-200 dark:bg-amber-800 text-slate-900 dark:text-white rounded px-1 font-bold">${match}</mark>`);
                         snippetHtml = `<div class="text-[10px] text-slate-500 dark:text-slate-400 bg-slate-100/80 dark:bg-slate-950/50 p-2 rounded-xl mt-1.5 border border-slate-200/40 dark:border-slate-800/60 font-mono">.. ${highlightSnippet} ..</div>`;
                     }
                 }
@@ -1433,7 +1622,7 @@ ${actionBullets}
                 const displayAttendees = query && m.attendees ? m.attendees.replace(new RegExp(query, 'gi'), match => `<mark class="bg-yellow-200 dark:bg-yellow-900/60 text-slate-900 dark:text-white rounded px-0.5">${match}</mark>`) : m.attendees;
 
                 return `
-                    <div class="flex flex-col p-3.5 border border-slate-100 dark:border-darkBorder bg-slate-50 dark:bg-slate-900 rounded-2xl hover:border-indigo-500/50 transition">
+                    <div class="flex flex-col p-3.5 border border-slate-100 dark:border-darkBorder bg-slate-50 dark:bg-slate-900 rounded-2xl hover:border-indigo-500/50 transition font-sans">
                         <div class="flex items-center justify-between">
                             <div onclick="selectArchive('${m.id}')" class="cursor-pointer flex-1 pr-3 min-w-0">
                                 <h4 class="text-xs font-extrabold truncate ${m.id === activeId ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-700 dark:text-slate-200'}">${displayTitle}</h4>
@@ -1490,6 +1679,7 @@ ${actionBullets}
             document.getElementById('archiveBadge').innerText = getDB().length;
         }
 
+        // 커서 지점에 텍스트 퀵 삽입
         function insertAtCursor(val) {
             const el = document.getElementById('rawText');
             const start = el.selectionStart;
@@ -1513,7 +1703,7 @@ ${actionBullets}
             t.style.opacity = '1';
             setTimeout(() => {
                 if (t) t.style.opacity = '0';
-            }, 3000);
+            }, 3500);
         }
 
         function toggleSettings() { document.getElementById('settingsModal').classList.toggle('hidden'); }
@@ -1564,6 +1754,17 @@ ${actionBullets}
                 document.getElementById('fileName').innerText = file.name;
                 document.getElementById('audioElement').src = URL.createObjectURL(file);
                 document.getElementById('audioPlayer').classList.remove('hidden');
+                
+                // 아이패드 iOS 사파리 오디오 락 해제용 리스너 임시 연결
+                const unlockAudioOnTouch = () => {
+                    const audioEl = document.getElementById('audioElement');
+                    audioEl.play().then(() => {
+                        audioEl.pause();
+                    }).catch(e => console.log("Audio contextual unlock passed", e));
+                    window.removeEventListener('touchstart', unlockAudioOnTouch);
+                };
+                window.addEventListener('touchstart', unlockAudioOnTouch);
+                
                 showToast('음성 파일을 성공적으로 로드했습니다.');
             }
         }
@@ -1574,7 +1775,6 @@ ${actionBullets}
             player.playbackRate = parseFloat(speed);
         }
 
-        // 실무용 기안 결재선 동적 파싱 및 출력 제어
         function drawApprovalLine() {
             const name1 = document.getElementById('apprName1')?.value || '기안/김대리';
             const name2 = document.getElementById('apprName2')?.value || '검토/박팀장';
@@ -1596,7 +1796,6 @@ ${actionBullets}
             if (r3 && u3) { r3.innerText = split3[0] || '승인'; u3.innerText = split3[1] || ''; }
         }
 
-        // 실무 도구 패널(결재선/메신저 포매터) 열기/닫기 토글
         function toggleCorporatePanel() {
             const panel = document.getElementById('corporatePanel');
             if (panel) {
@@ -1605,7 +1804,6 @@ ${actionBullets}
             }
         }
 
-        // 결재선 영역 숨기기 및 보이기 제어
         function toggleApprovalLineVisibility() {
             const display = document.getElementById('approvalLineDisplay');
             const btn = document.getElementById('btnToggleApproval');
@@ -1616,7 +1814,6 @@ ${actionBullets}
             }
         }
 
-        // 헤더 보관함 빠른 열기 액션 연결
         function openArchiveModal() {
             toggleArchiveModal(true);
         }
