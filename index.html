@@ -458,6 +458,9 @@
         let audioChunks = [];
         let recordedAudioBlob = null;
 
+        // 실제 업로드 음성 파싱과 가상 가이드 꼬임 방지 플래그 (추가)
+        let isSimulationActive = false;
+
         const DB_KEY = 'm_minutes_db_v3_0';
         const CONFIG_KEY = 'm_minutes_config_v3_0';
 
@@ -1465,12 +1468,24 @@ ${todoBlock}
                     player.src = URL.createObjectURL(file);
                     document.getElementById('audioPlayer').classList.remove('hidden');
                     
-                    // 파일 업로드 시 즉각적으로 로컬 오프라인 대본 추출 구동
-                    runLocalAutoTranscription(file);
+                    const config = getConfig();
+                    if (config.apiKey) {
+                        // API 키가 있으면 실제 고정밀 AI 음성 인식 자동 수행! (가상 시뮬레이터 차단)
+                        isSimulationActive = false;
+                        document.getElementById('rawText').value = "[AI 분석 상태] 오디오 파일 업로드 완료. 실제 음향 데이터를 추출하여 인공지능 분석(STT)을 시작합니다. 잠시만 기다려 주세요...";
+                        runAudioTranscribe();
+                    } else {
+                        // API 키가 없어서 실 음성 변환이 불가능할 때만 예외적으로 데모용 가상 시뮬레이션 모드 가동
+                        isSimulationActive = true;
+                        showToast('데모 모드: API Key가 없어 실제 변환 대신 가상 시뮬레이션 대본이 작동합니다.');
+                        runLocalAutoTranscription(file);
 
-                    player.ontimeupdate = () => {
-                        simulateAudioTimeline(player.currentTime);
-                    };
+                        player.ontimeupdate = () => {
+                            if (isSimulationActive) {
+                                simulateAudioTimeline(player.currentTime);
+                            }
+                        };
+                    }
                 } catch (e) {
                     showToast('사파리 샌드박스 파일 권한 제한을 우회합니다.');
                 }
@@ -1479,6 +1494,7 @@ ${todoBlock}
 
         // 요구사항 2: 로컬 고속 스캔 및 인스턴트 대본 삽입 이펙터
         function runLocalAutoTranscription(file) {
+            if (!isSimulationActive) return; // 실제 변환 중일 때는 가상 생성 차단
             const loader = document.getElementById('localParseLoader');
             const progress = document.getElementById('localProgressBar');
             const text = document.getElementById('localProgressText');
@@ -1497,6 +1513,7 @@ ${todoBlock}
                     clearInterval(interval);
                     setTimeout(() => {
                         loader.classList.add('hidden');
+                        if (!isSimulationActive) return; // 도중에 API 변환이 가동되었다면 적용 안 함
                         
                         // 파일 이름에 기반한 도메인별 대화 생성 (기획, 보안, 마케팅 등)
                         const name = file.name.toLowerCase();
@@ -1512,7 +1529,7 @@ ${todoBlock}
 
                         document.getElementById('rawText').value = targetScript;
                         autoSave();
-                        showToast('음성 파일 내부 메타 데이터로부터 실시간 대화 스크립트를 즉각 추출 완료했습니다.');
+                        showToast('데모 스크립트 적용 완료. 정밀 번역은 API Key를 연동하십시오.');
                     }, 400);
                 }
             }, 250);
@@ -1525,6 +1542,7 @@ ${todoBlock}
         }
 
         function simulateAudioTimeline(currentTime) {
+            if (!isSimulationActive) return; // 실제 분석 시 타임라인 덮어쓰기 금지
             const sec = Math.floor(currentTime);
             const area = document.getElementById('rawText');
             
@@ -1540,7 +1558,6 @@ ${todoBlock}
                 if (!area.value.includes(line)) {
                     area.value += (area.value ? '\n' : '') + line;
                     autoSave();
-                    showToast('음성 트랙 타임라인에서 실시간 대화가 동조 추출되었습니다.');
                 }
             }
         }
@@ -1553,8 +1570,13 @@ ${todoBlock}
             if (!file) return showToast('업로드한 오디오 소스 파일이 검출되지 않았습니다.');
             if (!config.apiKey) return showToast('설정에서 Gemini API Key를 먼저 입력하셔야 AI 고정밀 추출을 하실 수 있습니다.');
 
+            // 실제 오디오 받아쓰기 구동으로 시뮬레이션 강제 완전 차단
+            isSimulationActive = false;
             document.getElementById('aiLoader').classList.remove('hidden');
-            showToast('대용량 사운드 바이너리 데이터 인코딩 및 전송 준비 중...');
+            showToast('실제 사운드 주파수 인코딩 및 구글 AI 원격 전송 준비 중...');
+            
+            const area = document.getElementById('rawText');
+            area.value = "[AI 분석 진행 중] 구글 클라우드에서 오디오 바이너리 주파수를 읽어 화자 분할(STT) 및 회의 대화 기록을 재현하고 있습니다. 파일 길이에 따라 최대 1분 가량 소요됩니다...";
 
             try {
                 const base64Audio = await convertFileToBase64(file);
@@ -1577,7 +1599,7 @@ ${todoBlock}
                                 }
                             },
                             {
-                                text: "이 오디오 파일을 경청하고 화자 분할(예: [김대리], [박팀장])이 완벽히 가미된 비즈니스 텍스트 대화 스크립트로 깔끔하게 변환하여 작성해줘."
+                                text: "이 오디오 파일의 음성을 경청하고, 화자 목소리를 분할(예: [김대리], [박팀장])하여 비즈니스 대화 스크립트로 깔끔하게 변환하여 작성해줘."
                             }
                         ]
                     }]
@@ -1588,13 +1610,14 @@ ${todoBlock}
                     const scriptText = data.candidates[0].content.parts[0].text;
                     document.getElementById('rawText').value = scriptText;
                     autoSave();
-                    showToast('AI가 파일 통째로 정밀 화자 분할 받아쓰기를 완수했습니다.');
+                    showToast('AI가 오디오 파일 내용 그대로 정밀 받아쓰기를 완료했습니다!');
                 } else {
                     throw new Error('바이너리 음파 분석 불가능한 사양입니다.');
                 }
             } catch (err) {
                 console.error("AI 오디오 받아쓰기 장애 발생:", err);
-                showToast(`변환 장애 원인: ${err.message}. 오프라인 시뮬레이션 추출을 계속 적용합니다.`);
+                document.getElementById('rawText').value = "[AI 분석 오류]\n" + err.message + "\n\n설정에서 올바른 API Key를 입력했는지 및 파일 호환 여부를 재확인해 주세요.";
+                showToast(`변환 장애 원인: ${err.message}`);
             } finally {
                 document.getElementById('aiLoader').classList.add('hidden');
             }
