@@ -1,0 +1,311 @@
+<!-- ... existing code ... -->
+    <header class="no-print sticky top-0 z-40 bg-white/80 dark:bg-darkCard/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-700 px-4 py-3 flex items-center justify-between">
+        <div class="flex items-center space-x-3">
+            <div class="p-2 bg-indigo-600 text-white rounded-xl shadow-lg">
+                <i data-lucide="zap" class="w-5 h-5"></i>
+            </div>
+            <div>
+                <h1 class="text-md font-bold tracking-tight flex items-center gap-2">
+                    M-Minutes <span class="text-[10px] bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300 px-2 py-0.5 rounded-full">v3.0 Enterprise</span>
+                </h1>
+                <div class="flex items-center gap-1.5 text-[10px] text-slate-500">
+                    <i data-lucide="timer" class="w-3 h-3"></i> 
+                    진행 시간: <span id="meetingDuration">00:00:00</span>
+                    <span id="screenOrientation" class="orientation-badge ml-2 font-bold text-indigo-500"></span>
+                </div>
+            </div>
+        </div>
+<!-- ... existing code ... -->
+        window.onload = () => {
+            if (typeof lucide !== 'undefined') {
+                lucide.createIcons();
+            } else {
+                setTimeout(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); }, 1000);
+            }
+            initApp();
+            initTheme();
+            detectOrientation();
+            
+            // 실시간 투두 감지 및 문서 속성 변경 자동 세이브 바인딩
+            document.getElementById('finalText').addEventListener('input', () => {
+                renderTodos();
+                autoSave();
+            });
+            document.querySelectorAll('input, textarea').forEach(el => {
+                el.addEventListener('input', autoSave);
+            });
+
+            // 회전 감지 리스너 바인딩 (요구사항 3)
+            window.addEventListener('resize', detectOrientation);
+            window.addEventListener('orientationchange', detectOrientation);
+
+            const savedConfig = getConfig();
+            document.getElementById('aiModelBadge').innerText = savedConfig.model ? savedConfig.model.replace('gemini-', '').toUpperCase() : '1.5-FLASH';
+        };
+
+        // 가로세로 모드 실시간 추적 (요구사항 3)
+        function detectOrientation() {
+            const badge = document.getElementById('screenOrientation');
+            const width = window.innerWidth;
+            const height = window.innerHeight;
+            
+            if (width > height) {
+                badge.innerText = "💻 가로 모드";
+            } else {
+                badge.innerText = "📱 세로 모드";
+            }
+        }
+
+        // 앱 초기 구동 세션 불러오기
+        function initApp() {
+            const db = getDB();
+            if (db.length > 0) {
+                loadSession(db[db.length - 1].id);
+            } else {
+                createNewMeeting();
+            }
+            updateArchiveBadge();
+            startDurationTimer();
+            drawApprovalLine();
+        }
+
+        function initTheme() {
+            const saved = localStorage.getItem('theme') || 'light';
+            document.documentElement.className = saved;
+            updateThemeIcons(saved);
+        }
+
+        function toggleTheme() {
+            const current = document.documentElement.className;
+            const target = current === 'light' ? 'dark' : 'light';
+            document.documentElement.className = target;
+            localStorage.setItem('theme', target);
+            updateThemeIcons(target);
+        }
+
+        function updateThemeIcons(theme) {
+            if (theme === 'dark') {
+                document.getElementById('themeIconSun').classList.add('hidden');
+                document.getElementById('themeIconMoon').classList.remove('hidden');
+            } else {
+                document.getElementById('themeIconSun').classList.remove('hidden');
+                document.getElementById('themeIconMoon').classList.add('hidden');
+            }
+        }
+
+        let fontSizeIdx = 1;
+        const fontClasses = ['font-size-small', 'font-size-base', 'font-size-large'];
+        const fontLabels = ['가-', '가', '가+'];
+        
+        function cycleFontSize() {
+            fontSizeIdx = (fontSizeIdx + 1) % 3;
+            document.body.classList.remove(...fontClasses);
+            document.body.classList.add(fontClasses[fontSizeIdx]);
+            document.getElementById('fontSizeLabel').innerText = fontLabels[fontSizeIdx];
+            showToast(`글자 크기가 변경되었습니다: ${fontLabels[fontSizeIdx]}`);
+        }
+
+        function startDurationTimer() {
+            if (durationInterval) clearInterval(durationInterval);
+            durationInterval = setInterval(() => {
+                // 일시정지 상태가 아닐 때만 타이머 가동 (요구사항 4)
+                if (!isPaused && isRecording) {
+                    durationSeconds++;
+                } else if (!isRecording) {
+                    // 미녹음 상태일 때는 앱 자체적으로 전체 시간 누적
+                    durationSeconds++;
+                }
+                const h = String(Math.floor(durationSeconds / 3600)).padStart(2, '0');
+                const m = String(Math.floor((durationSeconds % 3600) / 60)).padStart(2, '0');
+                const s = String(durationSeconds % 60).padStart(2, '0');
+                document.getElementById('meetingDuration').innerText = `${h}:${m}:${s}`;
+            }, 1000);
+        }
+
+        function filterArchive() {
+            const query = document.getElementById('archiveSearch').value.toLowerCase();
+            renderArchive(query);
+        }
+
+        function formatMd(type) {
+            const el = document.getElementById('finalText');
+            const start = el.selectionStart;
+            const end = el.selectionEnd;
+            const text = el.value;
+            const selected = text.substring(start, end);
+            let result = '';
+
+            switch(type) {
+                case 'bold': result = `**${selected}**`; break;
+                case 'italic': result = `*${selected}*`; break;
+                case 'list': result = `\n- ${selected}`; break;
+                case 'quote': result = `\n> ${selected}`; break;
+                case 'todo': result = `\n- [ ] [배정자] 작업 내용 (~목표일) [중요도]`; break;
+            }
+
+            el.value = text.substring(0, start) + result + text.substring(end);
+            el.focus();
+            const nextPos = start + result.length;
+            el.setSelectionRange(nextPos, nextPos);
+            
+            autoSave();
+            renderTodos();
+        }
+
+        function getDB() { return JSON.parse(localStorage.getItem(DB_KEY) || '[]'); }
+        function saveDB(db) { localStorage.setItem(DB_KEY, JSON.stringify(db)); }
+        // 2026 안정성이 검증된 범용 기본 모델 gemini-1.5-flash로 기본값 선언
+        function getConfig() { 
+            return JSON.parse(localStorage.getItem(CONFIG_KEY) || '{"apiKey":"","lang":"ko-KR","model":"gemini-1.5-flash"}'); 
+        }
+
+        function createNewMeeting() {
+<!-- ... existing code ... -->
+        function deleteTodoOnEditor(index) {
+            if (!window.cachedTodos || !window.cachedTodos[index]) return;
+            const target = window.cachedTodos[index];
+            const editor = document.getElementById('finalText');
+            
+            editor.value = editor.value.replace(target.fullLine + '\n', '').replace(target.fullLine, '');
+            autoSave();
+            renderTodos();
+            showToast('과업이 에디터 본문에서 소멸되었습니다.');
+        }
+
+        async function callGeminiAPI(apiKey, model, payload) {
+            // 구글 게이트웨이 및 API 키 제약 조건(v1/v1beta, 헤더/쿼리 파라미터)을 모두 극복하기 위한 4중 폴백 매트릭스
+            const endpoints = [
+                { version: 'v1beta', useHeader: true },
+                { version: 'v1', useHeader: true },
+                { version: 'v1beta', useHeader: false },
+                { version: 'v1', useHeader: false }
+            ];
+
+            let lastError = null;
+
+            for (const ep of endpoints) {
+                try {
+                    let url = `https://generativelanguage.googleapis.com/${ep.version}/models/${model}:generateContent`;
+                    let headers = { 'Content-Type': 'application/json' };
+                    
+                    if (ep.useHeader) {
+                        headers['x-goog-api-key'] = apiKey;
+                    } else {
+                        url += `?key=${apiKey}`;
+                    }
+
+                    const response = await fetch(url, {
+                        method: 'POST',
+                        headers: headers,
+                        body: JSON.stringify(payload)
+                    });
+
+                    if (response.ok) {
+                        return await response.json();
+                    }
+
+                    const errData = await response.json().catch(() => ({}));
+                    const errMsg = errData.error?.message || `HTTP ${response.status}`;
+                    lastError = new Error(errMsg);
+
+                    // 400 (Bad Request) 같은 기입 문법 에러는 폴백이 무의미하므로 즉시 탈출
+                    if (response.status === 400) {
+                        throw lastError;
+                    }
+                } catch (e) {
+                    lastError = e;
+                }
+            }
+
+            throw lastError || new Error("Gemini API 호출에 실패했습니다.");
+        }
+
+        async function runAI() {
+            const raw = document.getElementById('rawText').value.trim();
+            const config = getConfig();
+            if (!raw) return showToast('요약할 원본 내용이 대화록에 존재하지 않습니다.');
+            
+            document.getElementById('aiLoader').classList.remove('hidden');
+            const selectedPreset = document.getElementById('summaryTemplate').value;
+            let presetPrompt = "";
+            switch (selectedPreset) {
+                case "sprint":
+                    presetPrompt = "개발팀 주간 스프린트 회고 형식으로 주요 기능 변경 사안 및 마일스톤, 담당자들의 버그 패치 실무 항목을 정밀화해줘.";
+                    break;
+                case "brainstorm":
+                    presetPrompt = "발산적 아이디어 회의록 양식으로, 기획 배경과 장단점 비교, 타당성 검토 계획 및 담당자별 리서치 배정을 구체화해줘.";
+                    break;
+                case "sales":
+                    presetPrompt = "바이어 미팅/영업 공식 양식으로, 고객 요구 조건(VOC), 납기 일정, 단가 조율 사안 및 다음 액션 기한을 확실히 포커싱해줘.";
+                    break;
+                default:
+                    presetPrompt = "일반 정기 업무 주간 보고서 양식으로 논의된 결정사항 및 핵심 협의 지표를 계량화해줘.";
+            }
+
+            const prompt = `회의 녹취록을 기반으로 비즈니스 격식에 맞춘 완벽한 회의록 보고서를 작성해줘.
+주의 사항:
+1. 마크다운 격식을 매우 미려하게 활용해줘.
+2. 기안, 검토, 승인 단계가 포함될 수 있게 개요를 작성해줘.
+3. ${presetPrompt}
+4. 할 일(Action Items)은 담당자, 마감 기한, 우선순위를 분석하여 반드시 다음 표준 양식으로만 누수 없이 작성해줘:
+'- [ ] [담당자] 업무 세부 내용 (~기한) [우선순위]'
+(예시: '- [ ] [김대리] 사양서 최종 완성 배포 (~2026-07-20) [긴급]')
+
+녹취록 원본 데이터:
+${raw}`;
+
+            if (config.apiKey) {
+                const targetModel = config.model || 'gemini-1.5-flash';
+                
+                try {
+                    const payload = {
+                        contents: [{ parts: [{ text: prompt }] }]
+                    };
+                    const data = await callGeminiAPI(config.apiKey, targetModel, payload);
+                    
+                    if (data.candidates && data.candidates[0].content.parts[0].text) {
+                        const result = data.candidates[0].content.parts[0].text;
+                        document.getElementById('finalText').value = result;
+                        renderTodos();
+                        autoSave();
+                        showToast('Gemini가 고품격 보고 요약서 작성을 완수했습니다.');
+                    } else {
+                        throw new Error('응답 데이터 분석이 불가합니다.');
+                    }
+                } catch (e) {
+                    console.error("Gemini API 전송 장애 복구 기동:", e);
+                    showToast(`API 거부 사유: ${e.message}. 안전 지대 오프라인 요약본을 자동 조율합니다.`);
+                    simulateLocalSummary(raw);
+                } finally {
+                    document.getElementById('aiLoader').classList.add('hidden');
+                }
+            } else {
+                setTimeout(() => {
+                    simulateLocalSummary(raw);
+                    document.getElementById('aiLoader').classList.add('hidden');
+                }, 1200);
+            }
+        }
+<!-- ... existing code ... -->
+    <!-- 설정 모달 -->
+    <div id="settingsModal" class="no-print fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm hidden">
+        <div class="bg-white dark:bg-darkCard rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
+            <h3 class="font-bold flex items-center gap-2 text-sm"><i data-lucide="settings" class="text-indigo-500"></i> 설정</h3>
+            <div class="space-y-3 text-xs">
+                <div>
+                    <label class="block text-[10px] font-bold text-slate-400 mb-1">Gemini API Key</label>
+                    <input type="password" id="apiKey" class="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 outline-none" placeholder="구글 AI 스튜디오 키를 입력하세요 (AQ. 혹은 AIza)">
+                </div>
+                <div>
+                    <label class="block text-[10px] font-bold text-slate-400 mb-1">Gemini AI 요약 모델 엔진</label>
+                    <select id="apiModel" class="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 outline-none text-slate-900 dark:text-white">
+                        <option value="gemini-1.5-flash">Gemini 1.5 Flash (가장 안정적이고 권장)</option>
+                        <option value="gemini-2.0-flash">Gemini 2.0 Flash (차세대 초고속)</option>
+                        <option value="gemini-3.5-flash">Gemini 3.5 Flash (엔터프라이즈 전용)</option>
+                        <option value="gemini-3.1-flash-lite">Gemini 3.1 Flash-Lite (경량 고속화)</option>
+                        <option value="gemini-3.1-pro-preview">Gemini 3.1 Pro (고정밀 심층 요약)</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-[10px] font-bold text-slate-400 mb-1">음성 인식 언어</label>
+<!-- ... existing code ... -->
