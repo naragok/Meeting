@@ -985,6 +985,54 @@
             showToast('과업이 에디터 본문에서 소멸되었습니다.');
         }
 
+        async function callGeminiAPI(apiKey, model, payload) {
+            // [1차 시도] HTTP 헤더 단독 전송 방식 (URL에 ?key=를 붙이지 않음)
+            // 구글이 권장하는 최신 Auth Key (AQ. 접두사) 규격의 credentials 혼선 충돌을 방어합니다.
+            const urlWithoutQuery = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
+            try {
+                const response = await fetch(urlWithoutQuery, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'x-goog-api-key': apiKey
+                    },
+                    body: JSON.stringify(payload)
+                });
+                if (response.ok) {
+                    return await response.json();
+                }
+                
+                const errData = await response.json().catch(() => ({}));
+                const errMsg = errData.error?.message || `HTTP ${response.status}`;
+                console.warn("1차 헤더 기반 호출 미통과 (폴백 전개):", errMsg);
+                
+                // 인증 거부(401) 또는 권한 문제(403)가 확실하다면 2차 폴백을 강제 추진
+                if (response.status === 401 || response.status === 403) {
+                    throw new Error(errMsg);
+                }
+            } catch (headerError) {
+                console.warn("1차 헤더 요청 실패, 2차 URL 쿼리 파라미터 방식으로 우회 전환합니다.", headerError);
+            }
+
+            // [2차 시도] URL 쿼리 파라미터 단독 방식 (x-goog-api-key 헤더를 완전히 배제)
+            // 두 방식을 섞어 보내면 구글 클라우드 게이트웨이가 토큰 타입을 오인하여 ACCESS_TOKEN_TYPE_UNSUPPORTED를 뱉어내므로 철저히 격리합니다.
+            const urlWithQuery = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+            const response = await fetch(urlWithQuery, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(payload)
+            });
+            
+            if (!response.ok) {
+                const errData = await response.json().catch(() => ({}));
+                throw new Error(errData.error?.message || `HTTP ${response.status}`);
+            }
+            
+            return await response.json();
+        }
+
         async function runAI() {
             const raw = document.getElementById('rawText').value.trim();
             const config = getConfig();
@@ -1021,26 +1069,13 @@ ${raw}`;
 
             if (config.apiKey) {
                 const targetModel = config.model || 'gemini-2.5-flash';
-                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${targetModel}:generateContent?key=${config.apiKey}`;
                 
                 try {
-                    const res = await fetch(apiUrl, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'x-goog-api-key': config.apiKey
-                        },
-                        body: JSON.stringify({
-                            contents: [{ parts: [{ text: prompt }] }]
-                        })
-                    });
+                    const payload = {
+                        contents: [{ parts: [{ text: prompt }] }]
+                    };
+                    const data = await callGeminiAPI(config.apiKey, targetModel, payload);
                     
-                    if (!res.ok) {
-                        const errData = await res.json();
-                        throw new Error(errData.error?.message || `응답 코드: ${res.status}`);
-                    }
-                    
-                    const data = await res.json();
                     if (data.candidates && data.candidates[0].content.parts[0].text) {
                         const result = data.candidates[0].content.parts[0].text;
                         document.getElementById('finalText').value = result;
@@ -1532,37 +1567,23 @@ ${todoBlock}
                     finalMimeType = 'audio/mp3'; 
                 }
 
-                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${targetModel}:generateContent?key=${config.apiKey}`;
-                
-                const response = await fetch(apiUrl, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'x-goog-api-key': config.apiKey
-                    },
-                    body: JSON.stringify({
-                        contents: [{
-                            parts: [
-                                {
-                                    inlineData: {
-                                        mimeType: finalMimeType,
-                                        data: base64Audio
-                                    }
-                                },
-                                {
-                                    text: "이 오디오 파일을 경청하고 화자 분할(예: [김대리], [박팀장])이 완벽히 가미된 비즈니스 텍스트 대화 스크립트로 깔끔하게 변환하여 작성해줘."
+                const payload = {
+                    contents: [{
+                        parts: [
+                            {
+                                inlineData: {
+                                    mimeType: finalMimeType,
+                                    data: base64Audio
                                 }
-                            ]
-                        }]
-                    })
-                });
+                            },
+                            {
+                                text: "이 오디오 파일을 경청하고 화자 분할(예: [김대리], [박팀장])이 완벽히 가미된 비즈니스 텍스트 대화 스크립트로 깔끔하게 변환하여 작성해줘."
+                            }
+                        ]
+                    }]
+                };
 
-                if (!response.ok) {
-                    const errRes = await response.json();
-                    throw new Error(errRes.error?.message || `상태코드: ${response.status}`);
-                }
-
-                const data = await response.json();
+                const data = await callGeminiAPI(config.apiKey, targetModel, payload);
                 if (data.candidates && data.candidates[0].content.parts[0].text) {
                     const scriptText = data.candidates[0].content.parts[0].text;
                     document.getElementById('rawText').value = scriptText;
